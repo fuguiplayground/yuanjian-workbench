@@ -76,7 +76,7 @@ function harness(initial = fixture()) {
     vm.runInContext(definition,context);
   }
   vm.runInContext(html.slice(html.indexOf('let searchUpdateTimer;'),html.indexOf("document.addEventListener('change',event=>")),context);
-  for (const file of ['web/collection.js','web/keyword-controls.js','web/research.js','web/watch.js','web/workflow.js']) vm.runInContext(read(file),context,{filename:file});
+  for (const file of ['web/collection.js','web/keyword-controls.js','web/research.js','web/watch.js','web/workflow.js','web/business.js']) vm.runInContext(read(file),context,{filename:file});
   const run=code=>vm.runInContext(code,context);
   const fire=(type,target,extra={})=>{for (const fn of listeners[type] || []) fn({target,...extra})};
   return {state,calls,context,run,fire,checked,fields,downloads,modal(){return lastModal},
@@ -104,14 +104,14 @@ async function main() {
   await fresh.run("workflowAction('ai-keywords', {})");
   assert.equal(fresh.state.page,'keywords');
   const analysisPage=fresh.run('keywordWorkspace()');
-  assert.match(analysisPage,/<h1>关键词清洗<\/h1>/);
+  assert.match(analysisPage,/<h1>整理词库<\/h1>/);
   assert.match(analysisPage,/用户在寻找清洗方式。/,'completed analysis is directly readable without choosing another report tab');
   assert.doesNotMatch(analysisPage,/keyword-view|workspace-tabs|id="search-input"/,'keyword analysis no longer duplicates the source library');
   assert.equal((analysisPage.match(/data-action="ai-keywords"/g)||[]).length,1,'the report exposes one analysis action');
   const steps=fresh.run("flowNav('audience')");
-  assert.equal((steps.match(/data-action="navigate"/g)||[]).length,6);
+  assert.equal((steps.match(/data-action="navigate"/g)||[]).length,3);
   assert.match(steps,/class="active" data-action="navigate" data-page="audience"/);
-  assert.match(steps,/人群与场景/);assert.match(steps,/关键词清洗/);assert.match(steps,/人群策略/);
+  assert.match(steps,/拆分人群/);assert.match(steps,/整理词库/);assert.match(steps,/人群策略/);
   assert.doesNotMatch(steps,/data-page="posts"/);
   assert.match(fresh.run('insightWorkspace()'),/<h1>需求与营销<\/h1>/);
   assert.match(fresh.run('insightWorkspace()'),/生成需求与营销建议/);

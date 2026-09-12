@@ -39,8 +39,9 @@ PROFILE = obj({
     'validation_questions': arr(S), 'evidence_ids': IDS,
 })
 
-MODULE_ORDER = ('clean', 'audience', 'intent', 'comments', 'notes', 'topics', 'summary')
+MODULE_ORDER = ('clean', 'audience', 'intent', 'comments', 'notes', 'topics', 'summary', 'segments')
 MODULES = {
+    'segments': {'label': '分人群营销策略', 'collections': ('keywords', 'posts', 'reviews'), 'prompt': '_AUDIENCE_SYSTEM', 'output': '同一行为下按动机与人生阶段拆人群，再逐人群制定产品、渠道、内容、达人及促销策略'},
     'clean': {'label': '关键词库', 'collections': ('keywords',), 'prompt': '_CLEAN_SYSTEM',
               'output': '逐词分类、内容建议、主题选题地图、高价值词与品牌机会'},
     'audience': {'label': '人群画像', 'collections': ('keywords', 'posts', 'reviews'), 'prompt': '_AUDIENCE_SYSTEM',
@@ -86,6 +87,12 @@ SCHEMAS = {
         'cautions': arr(POINT), 'self_check': obj({**{k: {'type': 'boolean'} for k in
                   ('no_anxiety', 'narrowest', 'has_contrast', 'real_demand')}, 'note': S})}),
 }
+
+# 新模块保留旧画像 schema，不改变已保存历史报告的校验契约。
+SCHEMAS['segments'] = obj({**BASE, 'audiences': arr(obj({**PROFILE['properties'],
+    'buying_motivation': POINT, 'life_stage': POINT,
+    'marketing': obj({k: POINT for k in ('product', 'channels', 'content', 'creators', 'promotion')})})),
+    'audience_map': POINT, 'next_steps': arr(POINT)})
 
 COMMON = '''
 本次只完成指定模块，不把所有分析压缩成一句话简报。严格按本模块 schema 输出。
@@ -143,6 +150,20 @@ words 只能选本模块输入的关键词原文，无关键词时为空，引�
 self_check 四项如实填 boolean；有 false 时 note 写未通过原因和需补验证，不强迫全部通过。''',
 }
 
+
+ADAPTATIONS['segments'] = ADAPTATIONS['audience'] + """
+本模块同时输出拆分人群与每类人的完整营销方案，两页读取同一个人群对象，禁止名称猜配或拼接其他报告。
+先分析原始词、帖子与评论的场景、要完成的任务、阻碍、期待，再按购买动机 × 人生阶段拆分。
+同一标签不等于同一动机，同一身份也可能有两种购买目的。没有原文支持的划分只能标为假设；不要虚构姓名。
+buying_motivation 解释为什么买；life_stage 只写资料支持的状态，未知则明确待验证。
+marketing.product 写产品特性建议、设计要点、价值主张以及需验证的证明；不编造现有规格。
+marketing.channels 写这类人在哪个具体场景被触达、选该渠道的理由与试点动作。
+marketing.content 写痛点共鸣、场景演示、情感表达三个具体方向，各给一个标题和证明材料。
+marketing.creators 写达人类型、适配原因及筛选条件，不虚构真实达人和报价。
+marketing.promotion 写适配的组合或促销机制、需要确认的成本及测试指标，价格折扣仅为待测建议。
+所有 marketing 项是策略建议，basis 为 inference 或 unknown，不作为已证实效果。
+缺少产品信息、原帖或评论必须在 limitations 明确列出。不得照抄参考案例的12小时持妆等承诺。
+"""
 
 def system_prompt(key, prompts, guard):
     return guard + prompts[MODULES[key]['prompt']] + COMMON + ADAPTATIONS[key]
@@ -261,7 +282,7 @@ def validate(key, report, evidence):
         report['journey'] = [{'stage': stage, 'count': sum(i['stage'] == stage for i in report['items']),
                               'evidence_ids': [i['id'] for i in report['items'] if i['stage'] == stage]}
                              for stage in ('A1', 'A2', 'A3', 'A4', 'A5')]
-    elif key == 'audience':
+    elif key in ('audience', 'segments'):
         if len(report['audiences']) > 5:
             raise ValueError('人群深描最多五类，不得用数量冒充深度')
         if not report['audiences']:

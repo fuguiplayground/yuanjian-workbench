@@ -38,7 +38,7 @@ async function main(){
  const reopened=fixture(),ongoing=reportFixture('reopened');ongoing.status='running';ongoing.requested_modules=['audience','comments','summary'];reopened.ai_reports=[ongoing];
  assert.deepEqual(clone(harness(reopened).run('selectedInsightModules()')),['audience','comments','summary'],'reload restores the actual module selection instead of changing comments to intent');
  const choice=harness(),page=choice.run('insightWorkspace()');
- assert.equal((page.match(/name="insight-module"/g)||[]).length,7);
+ assert.equal((page.match(/name="insight-module"/g)||[]).length,8);
  assert.match(page,/这次重点看什么/);assert.match(page,/每块独立取样/);
  assert.deepEqual(clone(choice.run('selectedInsightModules()')),['audience','intent','summary']);
  await choice.run("workflowAction('ai-insights',{})");

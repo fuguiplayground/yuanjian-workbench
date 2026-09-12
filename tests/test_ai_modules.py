@@ -46,6 +46,12 @@ def module_result(key, evidence):
                     bottleneck=point(ids), demands=[{'need': '减少清洗耗时', 'urgency': '待验证',
                     'diagnosis': point(ids), 'action': point(ids)}],
                     emotions=[{'emotion': '纠结', 'interpretation': point(ids)}], next_steps=[point(ids)])
+    if key == 'segments':
+        result = module_result('audience', evidence)
+        for person in result['audiences']:
+            person.update(buying_motivation=point(ids), life_stage=point([], 'unknown'),
+                          marketing={k: point(ids) for k in ('product','channels','content','creators','promotion')})
+        return result
     if key == 'audience':
         person = {'name': '被清洗步骤劝退的养宠者', 'one_line': '希望持续供水，又不愿增加泵体清洗负担。',
                   'layers': {k: point(ids) for k in ('natural', 'social', 'consumption', 'scene',
@@ -147,9 +153,9 @@ class ModuleTests(unittest.TestCase):
         jobs.work(jobs.jobs[id_])
         self.assertEqual(calls, list(modules.MODULE_ORDER))
         self.assertEqual(jobs.get(id_)['status'], 'success')
-        self.assertEqual(jobs.get(id_)['completed_modules'], 7)
+        self.assertEqual(jobs.get(id_)['completed_modules'], len(modules.MODULE_ORDER))
         saved = ai.normalize_ai_report(store.p['ai_reports'][0], store.p)
-        self.assertEqual(saved['usage'], {'input_tokens': 70})
+        self.assertEqual(saved['usage'], {'input_tokens': 10 * len(modules.MODULE_ORDER)})
         self.assertEqual(saved['report']['modules']['notes']['evidence_snapshot'][0]['metrics'], {'likes': -1, 'comment_count': None})
         self.assertFalse(saved['report']['modules']['summary']['report']['self_check']['real_demand'])
 
@@ -346,3 +352,15 @@ class ModuleTests(unittest.TestCase):
             self.assertEqual(record['report']['modules']['comments']['report']['golden_quotes'][0]['quote'], p['reviews'][0]['body'])
 if __name__ == '__main__':
     unittest.main()
+
+class SegmentStrategyTests(unittest.TestCase):
+    def test_person_strategy_is_grounded_and_old_schema_stays_valid(self):
+        prepared = ai.prepare(sample_project(), {'kind':'insights'}, modules.MODULES['segments']['collections'], allow_empty=True, include_metrics=True)
+        evidence = prepared['evidence_snapshot']
+        result = module_result('segments', evidence)
+        validated = modules.validate('segments', result, evidence)
+        self.assertEqual(set(validated['audiences'][0]['marketing']), {'product','channels','content','creators','promotion'})
+        modules.validate('audience', module_result('audience', evidence), evidence)
+        result['audiences'][0]['marketing']['product']['evidence_ids'] = ['posts:not-provided']
+        with self.assertRaises(ValueError):
+            modules.validate('segments', result, evidence)

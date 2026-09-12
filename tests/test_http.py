@@ -36,6 +36,24 @@ class HTTPTests(unittest.TestCase):
             data = response.read()
             return response.status, json.loads(data) if 'application/json' in response.headers['Content-Type'] else data
 
+    def test_decision_workspace_roundtrip_and_conflict(self):
+        status, p = self.request('/api/projects', {'name': '决策测试', 'keyword': '词'})
+        self.assertEqual(status, 201)
+        url = '/api/projects/' + p['id'] + '/decision-workspace'
+        w = {'brief': {'goal': '找机会'}, 'selected_id': 'opp-1', 'cases': [{'id': 'opp-1', 'title': '场景机会', 'strategy': {'audience': '某类人'}}]}
+        old = p['revision']
+        status, saved = self.request(url, {'revision': old, 'workspace': w})
+        self.assertEqual(status, 200)
+        self.assertEqual(saved['data_version'], p['data_version'])
+        self.assertEqual(self.request(url, {'revision': old, 'workspace': w})[0], 409)
+        self.assertEqual(self.request('/api/projects/' + p['id'])[1]['decision_workspace'], saved['decision_workspace'])
+        status, restored = self.request('/api/restore', {'project': saved})
+        self.assertEqual(status, 201)
+        self.assertEqual(restored['decision_workspace'], saved['decision_workspace'])
+        w['selected_id'] = 'missing'
+        self.assertEqual(self.request(url, {'revision': saved['revision'], 'workspace': w})[0], 400)
+        self.assertEqual(self.request('/business.js')[0], 200)
+
     def test_http_create_import_analyze_restore_and_reopen(self):
         status, home = self.request('/')
         self.assertEqual(status, 200)
