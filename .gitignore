@@ -16,3 +16,16 @@ __pycache__/
 *.tmp
 .DS_Store
 Thumbs.db
+/.codex/
+/.agents/
+/.idea/
+/.vscode/
+/node_modules/
+/dist/
+/build/
+*.zip
+# 旧版私有分发工具与启动入口留在本机，团队使用根目录 team_start.py。
+/packaging/
+/start.command
+/start.bat
+/tests/test_team_package.py

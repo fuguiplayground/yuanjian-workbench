@@ -7,6 +7,7 @@ import re
 import threading
 
 import codex_runner
+import ai_modules
 
 PROMPT_PATH = Path(__file__).resolve().parent / 'prompts/sanjin.json'
 PROMPTS = json.loads(PROMPT_PATH.read_text(encoding='utf-8'))
@@ -91,7 +92,7 @@ def fingerprint(evidence):
                                      separators=(',', ':')).encode()).hexdigest()
 
 
-def prepare(project, body):
+def prepare(project, body, collections=None, allow_empty=False, include_metrics=False):
     if not isinstance(body, dict):
         raise ValueError('AI 任务参数必须是对象')
     kind, target = body.get('kind'), body.get('target', '')
@@ -103,7 +104,7 @@ def prepare(project, body):
         raise ValueError('请选择 1 至 500 条有效证据')
     if kind == 'insights' and ids:
         raise ValueError('千机塔洞察使用当前项目各类样本，无需单独传入编号')
-    collections = [target] if kind == 'translate' else ['keywords'] if kind == 'keywords' else list(KINDS)
+    collections = collections if collections is not None else [target] if kind == 'translate' else ['keywords'] if kind == 'keywords' else list(KINDS)
     evidence, counts, budget = [], {}, 40000
     for collection in collections:
         rows = project.get(collection, [])
@@ -128,10 +129,13 @@ def prepare(project, body):
                              'market_scope': row.get('market_scope', ''), 'provenance': row.get('provenance', 'import'),
                              'data_type': row.get('data_type', '') if collection == 'keywords' else '',
                              'text_truncated': len(text) < len(original)})
+            if include_metrics:
+                evidence[-1]['metrics'] = ai_modules.metrics(collection, row)
+                evidence[-1]['review_type'] = row.get('review_type', 'product') if collection == 'reviews' else ''
             counts[collection]['processed'] += 1
             budget -= len(text)
     total = sum(v['total'] for v in counts.values())
-    if not evidence:
+    if not evidence and not allow_empty:
         raise ValueError('没有待翻译原文；已有译文会保留' if kind == 'translate' else '请先采集或导入关键词、内容或评论')
     scope = {'total': total, 'processed': len(evidence), 'truncated': total - len(evidence),
              'text_truncated': sum(e['text_truncated'] for e in evidence), 'counts': counts,
@@ -144,24 +148,7 @@ def prepare(project, body):
 
 
 def check_schema(value, schema):
-    type_ = schema['type']
-    if type_ == 'object':
-        if not isinstance(value, dict) or set(value) != set(schema['properties']):
-            raise ValueError('AI 返回的报告字段不完整或包含未知字段')
-        for key, spec in schema['properties'].items():
-            check_schema(value[key], spec)
-    elif type_ == 'array':
-        if not isinstance(value, list) or len(value) > 500:
-            raise ValueError('AI 返回的列表格式无效')
-        for item in value:
-            check_schema(item, schema['items'])
-    elif type_ == 'string':
-        if not isinstance(value, str) or len(value) > 20000:
-            raise ValueError('AI 返回的文字格式无效')
-    elif type_ == 'boolean' and not isinstance(value, bool):
-        raise ValueError('AI 返回的判断格式无效')
-    if 'enum' in schema and value not in schema['enum']:
-        raise ValueError('AI 返回的分类标签无效')
+    ai_modules.check_schema(value, schema)
 
 
 def check_references(value, allowed):
@@ -220,15 +207,18 @@ def validate_report(kind, report, evidence):
     return report
 
 
-def verify_snapshot(record, project):
+def verify_snapshot(record, project, allow_empty=False):
     evidence, scope = record.get('evidence_snapshot'), record.get('scope')
-    if not isinstance(evidence, list) or not evidence or len(evidence) > 235 or not isinstance(scope, dict):
+    if not isinstance(evidence, list) or (not evidence and not allow_empty) or len(evidence) > 235 or not isinstance(scope, dict):
         raise ValueError('AI 报告缺少有效的证据快照')
     seen = set()
     for e in evidence:
         if not isinstance(e, dict) or e.get('kind') not in KINDS:
             raise ValueError('AI 报告证据类型无效')
-        if set(e) != {'id', 'kind', 'row_id', 'text', 'platform', 'source', 'market_scope', 'provenance', 'data_type', 'text_truncated'}:
+        fields = {'id', 'kind', 'row_id', 'text', 'platform', 'source', 'market_scope', 'provenance', 'data_type', 'text_truncated'}
+        if record.get('schema_version') == 2:
+            fields.update(('metrics', 'review_type'))
+        if set(e) != fields:
             raise ValueError('AI 报告证据字段无效')
         if type(e.get('text_truncated')) is not bool or not isinstance(e.get('text'), str):
             raise ValueError('AI 报告证据文本无效')
@@ -247,6 +237,10 @@ def verify_snapshot(record, project):
             raise ValueError('AI 报告证据与当前原文或来源不一致')
         if e.get('data_type') != (row.get('data_type', '') if e['kind'] == 'keywords' else ''):
             raise ValueError('AI 报告证据性质与原始数据不一致')
+        if record.get('schema_version') == 2 and e.get('metrics') != ai_modules.metrics(e['kind'], row):
+            raise ValueError('AI 报告引用指标与原始记录不一致')
+        if record.get('schema_version') == 2 and e.get('review_type') != (row.get('review_type', 'product') if e['kind'] == 'reviews' else ''):
+            raise ValueError('AI 报告评论类型与原始记录不一致')
     if scope.get('source_fingerprint') != fingerprint(evidence) or scope.get('evidence_ids') != [e['id'] for e in evidence]:
         raise ValueError('AI 报告证据校验值不匹配')
     if (scope.get('processed') != len(evidence) or type(scope.get('total')) is not int or
@@ -267,6 +261,10 @@ def verify_snapshot(record, project):
 
 
 def normalize_ai_report(record, project):
+    if isinstance(record, dict) and record.get('schema_version') == 2:
+        return normalize_modules_report(record, project)
+    if isinstance(record, dict) and record.get('schema_version', 1) != 1:
+        raise ValueError('AI 报告版本无效')
     if not isinstance(record, dict) or record.get('kind') not in SCHEMAS:
         raise ValueError('AI 报告类型无效')
     if not re.fullmatch(r'[a-f0-9]{16}', str(record.get('id', ''))):
@@ -296,6 +294,178 @@ def normalize_ai_report(record, project):
     return result
 
 
+def module_keys(value):
+    if (not isinstance(value, list) or not value or len(value) > len(ai_modules.MODULE_ORDER) or
+            any(not isinstance(k, str) or k not in ai_modules.MODULES for k in value)):
+        raise ValueError('请选择有效的洞察模块')
+    return [key for key in ai_modules.MODULE_ORDER if key in value]
+
+
+def module_prompt(key):
+    return ai_modules.system_prompt(key, PROMPTS['prompts'], GUARD)
+
+
+def safe_usage(value):
+    return {k: v for k, v in (value if isinstance(value, dict) else {}).items()
+            if k in ('input_tokens', 'output_tokens', 'cached_input_tokens') and type(v) is int and v >= 0}
+
+
+def clean_scope(scope):
+    result = {k: copy.deepcopy(scope[k]) for k in
+              ('total', 'processed', 'truncated', 'text_truncated', 'counts', 'evidence_ids', 'source_fingerprint')}
+    result['selection'] = str(scope.get('selection') or '')[:500]
+    return result
+
+
+def combined_scope(modules):
+    evidence, by_id, totals = [], {}, {}
+    for module in modules.values():
+        for key, count in module['scope']['counts'].items():
+            totals[key] = max(totals.get(key, 0), count['total'])
+        for row in module['evidence_snapshot']:
+            if row['id'] not in by_id:
+                evidence.append(copy.deepcopy(row))
+                by_id[row['id']] = row
+            elif by_id[row['id']] != row:
+                raise ValueError('模块间同一证据的快照不一致')
+    counts = {key: {'total': totals[key], 'processed': sum(e['kind'] == key for e in evidence)}
+              for key in KINDS if key in totals}
+    total = sum(totals.values())
+    scope = {'total': total, 'processed': len(evidence), 'truncated': total - len(evidence),
+             'text_truncated': sum(e['text_truncated'] for e in evidence), 'counts': counts,
+             'evidence_ids': [e['id'] for e in evidence], 'source_fingerprint': fingerprint(evidence),
+             'selection': '此处为各模块去重后的证据合集；每块独立取样并单独显示范围，合集不代表每块均覆盖全部资料。'}
+    return scope, evidence
+
+
+def modules_summary(record):
+    modules = record['report']['modules']
+    success = sum(m['status'] == 'success' for m in modules.values())
+    record['report']['summary'] = f'已保存 {success}/{len(modules)} 个模块。各模块保留独立范围、原文依据和待验证项。'
+    record['usage'] = {}
+    for module in modules.values():
+        for key, value in safe_usage(module.get('usage')).items():
+            record['usage'][key] = record['usage'].get(key, 0) + value
+
+
+def modules_status(modules):
+    statuses = [m['status'] for m in modules.values()]
+    return 'success' if all(s == 'success' for s in statuses) else 'partial' if 'success' in statuses else 'failed'
+
+
+def prior_module_context(modules):
+    """Carry concise findings into the summary without adding new source evidence."""
+    context = []
+    def text(value, limit=180):
+        return str(value or '')[:limit]
+    def point(value, limit=180):
+        return text((value or {}).get('text'), limit)
+    for key, module in modules.items():
+        if key == 'summary' or module['status'] != 'success':
+            continue
+        report = module['report']
+        entry = {'module': key, 'summary': text(report['summary'], 500), 'quality': report['quality'],
+                 'limitations': [text(v, 200) for v in report['limitations'][:2]]}
+        base = copy.deepcopy(entry)
+        if key == 'audience':
+            entry['audiences'] = [{'name': text(p['name'], 80), 'one_line': text(p['one_line'], 220),
+                'priority': p['priority'], 'priority_reason': point(p['priority_reason']),
+                'needs': {name: point(value, 140) for name, value in p['needs'].items()},
+                'scores': {name: value['score'] for name, value in p['scores'].items()}}
+                for p in report['audiences'][:5]]
+        elif key == 'intent':
+            entry['bottleneck'] = point(report['bottleneck'], 240)
+            entry['demands'] = [{'need': text(p['need'], 100), 'urgency': p['urgency'],
+                                  'diagnosis': point(p['diagnosis'])} for p in report['demands'][:5]]
+        elif key == 'comments':
+            entry['pains'] = [point(p['point']) for p in report['pains'][:5]]
+            entry['questions'] = [point(p['point']) for p in report['questions'][:3]]
+            entry['demand_priorities'] = [point(p) for p in report['demand_priorities'][:5]]
+        elif key == 'clean':
+            entry['findings'] = [point(p) for p in report['findings'][:4]]
+            entry['directions'] = [{'theme': text(p['theme'], 80), 'direction': point(p['direction'])}
+                                   for p in report['theme_recommendations'][:5]]
+        elif key == 'notes':
+            entry['themes'] = [text(p['theme'], 100) for p in report['themes'][:5]]
+            entry['gaps'] = [point(p) for p in report['gaps'][:4]]
+        elif key == 'topics':
+            entry['topics'] = [{'title': text(p['title'], 120), 'target': text(p['target'], 120),
+                               'angle': text(p['angle'], 180)} for p in report['topics'][:4]]
+            entry['priority_reason'] = point(report['priority_reason'], 240)
+        if len(json.dumps(context + [entry], ensure_ascii=False)) > 12000:
+            entry = base
+        if len(json.dumps(context + [entry], ensure_ascii=False)) > 12000:
+            break
+        context.append(entry)
+    return context
+
+
+def normalize_modules_report(record, project):
+    if (record.get('kind') != 'insights' or record.get('target', '') != '' or
+            not re.fullmatch(r'[a-f0-9]{16}', str(record.get('id', '')))):
+        raise ValueError('模块报告类型或编号无效')
+    keys = module_keys(record.get('requested_modules'))
+    if record['requested_modules'] != keys:
+        raise ValueError('模块报告目录顺序无效或含重复项')
+    version = record.get('data_version')
+    if type(version) is not int or not 0 <= version <= project['data_version']:
+        raise ValueError('模块报告数据版本无效')
+    status_ = record.get('status')
+    if status_ not in ('running', 'success', 'partial', 'failed', 'cancelled', 'interrupted'):
+        raise ValueError('模块报告状态无效')
+    report = record.get('report')
+    if (not isinstance(report, dict) or set(report) != {'title', 'summary', 'modules'} or
+            not isinstance(report['modules'], dict) or set(report['modules']) != set(keys)):
+        raise ValueError('模块报告目录与内容不一致')
+    if any(not isinstance(report.get(k), str) or len(report[k]) > 20000 for k in ('title', 'summary')):
+        raise ValueError('模块报告标题格式无效')
+    verify_snapshot(record, project, allow_empty=True)
+    result = {k: copy.deepcopy(record.get(k)) for k in
+              ('id', 'kind', 'target', 'status', 'data_version', 'created_at', 'finished_at',
+               'prompt_version', 'model', 'message', 'current_module')}
+    for key in ('created_at', 'finished_at', 'prompt_version', 'model', 'message'):
+        result[key] = str(result.get(key) or '')[:500]
+    result.update(schema_version=2, requested_modules=keys, scope=clean_scope(record['scope']),
+                  evidence_snapshot=copy.deepcopy(record['evidence_snapshot']), usage={},
+                  report={'title': report['title'], 'summary': report['summary'], 'modules': {}})
+    if result['current_module'] not in keys + ['', None]:
+        raise ValueError('报告当前模块无效')
+    for key in keys:
+        old = report['modules'][key]
+        if not isinstance(old, dict) or old.get('key') != key or old.get('data_version') != version:
+            raise ValueError('模块身份或数据版本不一致')
+        state = old.get('status')
+        if state not in ('pending', 'running', 'success', 'failed', 'skipped', 'cancelled', 'interrupted'):
+            raise ValueError('报告子模块状态无效')
+        verify_snapshot(dict(old, schema_version=2, kind='insights'), project, allow_empty=True)
+        evidence = old['evidence_snapshot']
+        if (set(old['scope']['counts']) != set(ai_modules.MODULES[key]['collections']) or
+                any(e['kind'] not in ai_modules.MODULES[key]['collections'] for e in evidence) or
+                any(c['processed'] > LIMITS[k] for k, c in old['scope']['counts'].items()) or
+                sum(len(e['text']) for e in evidence) > 40000):
+            raise ValueError('模块证据类型或范围超过上限')
+        if state == 'success' and not evidence or state == 'skipped' and evidence:
+            raise ValueError('模块状态与可用证据不一致')
+        module = {k: str(old.get(k) or '')[:500] for k in
+                  ('message', 'prompt_version', 'model', 'started_at', 'finished_at')}
+        module.update(key=key, label=ai_modules.MODULES[key]['label'], status=state, data_version=version,
+                      scope=clean_scope(old['scope']), evidence_snapshot=copy.deepcopy(evidence),
+                      usage=safe_usage(old.get('usage')),
+                      report=ai_modules.validate(key, old.get('report'), evidence) if state == 'success' else None)
+        if state in ('pending', 'running'):
+            module.update(status='interrupted', message='此前模块未完成，可选择本块继续生成')
+        result['report']['modules'][key] = module
+    scope, evidence = combined_scope(result['report']['modules'])
+    if evidence != result['evidence_snapshot'] or any(scope[k] != result['scope'][k] for k in scope if k != 'selection'):
+        raise ValueError('报告总范围与各模块快照不一致')
+    if status_ in ('success', 'partial', 'failed') and status_ != modules_status(result['report']['modules']):
+        raise ValueError('报告完成状态与各模块结果不一致')
+    if status_ == 'running':
+        result.update(status='interrupted', current_module='', message='服务已重启或任务来自另一设备；已完成模块保留，可选择未完成块继续')
+    modules_summary(result)
+    return result
+
+
 class AIJobs:
     def __init__(self, store, lock, uid, now, runner=None):
         self.store, self.lock, self.uid, self.now = store, lock, uid, now
@@ -306,9 +476,17 @@ class AIJobs:
         return codex_runner.status()
 
     def public(self, record, project_id):
-        return {k: copy.deepcopy(record.get(k)) for k in ('id', 'kind', 'target', 'status', 'message', 'scope',
+        result = {k: copy.deepcopy(record.get(k)) for k in ('id', 'kind', 'target', 'status', 'message', 'scope',
                                                          'created_at', 'finished_at')} | {
                     'project_id': project_id, 'report_id': record['id']}
+        if record.get('schema_version') == 2:
+            modules = record['report']['modules']
+            result.update(schema_version=2, requested_modules=list(record['requested_modules']),
+                          current_module=record.get('current_module', ''), total_modules=len(modules),
+                          completed_modules=sum(m['status'] in ('success', 'failed', 'skipped') for m in modules.values()),
+                          modules=[{k: copy.deepcopy(m.get(k)) for k in ('key', 'label', 'status', 'message', 'scope')}
+                                   for m in modules.values()])
+        return result
 
     def list(self, project_id=None):
         with self.lock:
@@ -319,6 +497,9 @@ class AIJobs:
                     job = self.public(record, p['id'])
                     if job['status'] == 'running' and job['id'] not in self.jobs:
                         job.update(status='interrupted', message='服务已重启或任务来自另一设备，原始数据保留，请重新生成')
+                        for module in job.get('modules', []):
+                            if module['status'] in ('pending', 'running'):
+                                module.update(status='interrupted', message='本块尚未完成，可选择继续')
                     results.append(job)
             return sorted(results, key=lambda j: j['created_at'] or '', reverse=True)
 
@@ -340,6 +521,8 @@ class AIJobs:
             return self.get(id_)
 
     def start(self, project, body):
+        if isinstance(body, dict) and 'modules' in body:
+            return self.start_modules(project, body)
         prepared = prepare(project, body)
         if self.runner is codex_runner.run and not codex_runner.executable():
             raise ValueError('未找到可用的 Codex 程序，请检查 codex.local.json 或 FIELDWORK_CODEX_PATH 的路径配置')
@@ -357,6 +540,133 @@ class AIJobs:
             self.jobs[record['id']] = job
             threading.Thread(target=self.work, args=(job,), daemon=True).start()
             return self.get(record['id'])
+
+    def start_modules(self, project, body):
+        if body.get('kind') != 'insights' or body.get('ids') is not None:
+            raise ValueError('模块洞察使用当前项目资料，请按模块选择分析')
+        selected = module_keys(body.get('modules'))
+        with self.lock:
+            if any(j['record']['status'] == 'running' for j in self.jobs.values()):
+                raise ValueError('本机已有 AI 任务正在运行，请等待完成或取消')
+            retained = {}
+            base_id = body.get('base_report_id')
+            if base_id is not None:
+                if not isinstance(base_id, str) or not re.fullmatch(r'[a-f0-9]{16}', base_id):
+                    raise ValueError('续跑报告编号无效')
+                base = next((r for r in project.get('ai_reports', []) if r['id'] == base_id), None)
+                if not base or base.get('schema_version') != 2:
+                    raise ValueError('只能从当前项目的模块报告继续生成')
+                if base.get('data_version') != project['data_version']:
+                    raise ValueError('资料已变化，请重新生成所需模块，不能与旧版本结论合并')
+                retained = normalize_modules_report(base, project)['report']['modules']
+                if 'summary' in retained and 'summary' not in selected:
+                    retained['summary'].update(status='interrupted', report=None, usage={}, started_at='', finished_at='',
+                        message='已选择重跑其他模块，综合判断需要重新生成；本次未自动调用 AI，旧结论仍保留在原报告中')
+            keys = [key for key in ai_modules.MODULE_ORDER if key in selected or key in retained]
+            modules = {}
+            for key in keys:
+                if key not in selected:
+                    modules[key] = retained[key]
+                    continue
+                prepared = prepare(project, {'kind': 'insights'}, ai_modules.MODULES[key]['collections'],
+                                   allow_empty=True, include_metrics=True)
+                prompt_hash = hashlib.sha256((module_prompt(key) + json.dumps(ai_modules.SCHEMAS[key], sort_keys=True)).encode()).hexdigest()[:12]
+                modules[key] = {'key': key, 'label': ai_modules.MODULES[key]['label'], 'status': 'pending',
+                    'message': '等待生成', 'data_version': project['data_version'], 'scope': prepared['scope'],
+                    'evidence_snapshot': prepared['evidence_snapshot'], 'prompt_version': PROMPT_VERSION + '-' + prompt_hash,
+                    'model': '本机 Codex', 'usage': {}, 'report': None, 'started_at': '', 'finished_at': ''}
+            if (any(modules[k]['evidence_snapshot'] for k in selected) and
+                    self.runner is codex_runner.run and not codex_runner.executable()):
+                raise ValueError('未找到可用的 Codex 程序，请检查 codex.local.json 或 FIELDWORK_CODEX_PATH 的路径配置')
+            scope, evidence = combined_scope(modules)
+            record = {'id': self.uid(), 'kind': 'insights', 'target': '', 'schema_version': 2,
+                'requested_modules': keys, 'current_module': '', 'status': 'running',
+                'data_version': project['data_version'], 'created_at': self.now(), 'finished_at': '',
+                'scope': scope, 'evidence_snapshot': evidence, 'prompt_version': PROMPT_VERSION + '-modules-v2',
+                'model': '本机 Codex', 'usage': {}, 'message': '按所选模块逐块生成，已完成结果会立即保存',
+                'report': {'title': str(project.get('keyword') or '当前项目')[:120] + ' · 需求与营销洞察',
+                           'summary': '', 'modules': modules}}
+            modules_summary(record)
+            project.setdefault('ai_reports', []).append(copy.deepcopy(record))
+            self.store.save(project, project['revision'])
+            job = {'record': record, 'project_id': project['id'], 'cancel': threading.Event(),
+                   'product': project.get('keyword', ''), 'run_modules': selected}
+            self.jobs[record['id']] = job
+            threading.Thread(target=self.work, args=(job,), daemon=True).start()
+            return self.get(record['id'])
+
+    def work_modules(self, job):
+        record = job['record']
+        modules = record['report']['modules']
+        try:
+            for key in job['run_modules']:
+                if job['cancel'].is_set():
+                    break
+                module = modules[key]
+                with self.lock:
+                    record['current_module'] = key
+                    module.update(status='running', started_at=self.now(), message='正在分析本模块样本')
+                    record['message'] = '正在生成：' + module['label'] + '；已完成模块可先查看'
+                    self.persist(job)
+                if not module['evidence_snapshot']:
+                    with self.lock:
+                        module.update(status='skipped', finished_at=self.now(),
+                                      message='缺少本模块所需的' + '/'.join({'keywords':'关键词','posts':'内容','reviews':'评论'}[k]
+                                              for k in ai_modules.MODULES[key]['collections']) + '资料，未调用 AI')
+                        modules_summary(record)
+                        self.persist(job)
+                    continue
+                try:
+                    payload = {'product': job['product'], 'scope': module['scope'],
+                               'evidence': module['evidence_snapshot'], 'module': key}
+                    if key == 'summary':
+                        payload['prior_modules'] = prior_module_context(modules)
+                    result, meta = self.runner(module_prompt(key), payload, ai_modules.SCHEMAS[key], cancel=job['cancel'])
+                    if job['cancel'].is_set():
+                        raise codex_runner.Cancelled('本次模块已取消；先前成功模块保留')
+                    result = ai_modules.validate(key, result, module['evidence_snapshot'])
+                    with self.lock:
+                        if job['cancel'].is_set():
+                            raise codex_runner.Cancelled('本次模块已取消；先前成功模块保留')
+                        module.update(status='success', report=result, model=str(meta.get('model') or '本机 Codex')[:100],
+                                      usage=safe_usage(meta.get('usage')), message='本块已生成并核对引用', finished_at=self.now())
+                        if result['quality'] == 'limited' or key == 'summary' and not all(result['self_check'][k] for k in
+                                ('no_anxiety', 'narrowest', 'has_contrast', 'real_demand')):
+                            module['message'] = '已保存有限结论，请查看资料缺口和需复核项'
+                except Exception as error:
+                    cancelled = isinstance(error, codex_runner.Cancelled) or job['cancel'].is_set()
+                    safe_error = str(error) if isinstance(error, (codex_runner.AIError, ValueError)) else '本模块处理失败，可单独重试'
+                    with self.lock:
+                        module.update(status='cancelled' if cancelled else 'failed', report=None,
+                                      message=safe_error[:300], finished_at=self.now())
+                    if cancelled:
+                        job['cancel'].set()
+                with self.lock:
+                    modules_summary(record)
+                    self.persist(job)
+            with self.lock:
+                if job['cancel'].is_set():
+                    for key in job['run_modules']:
+                        if modules[key]['status'] == 'pending':
+                            modules[key].update(status='cancelled', message='本次未开始；可选择此块继续', finished_at=self.now())
+                    record.update(status='cancelled', message='已停止后续模块；成功结果保留，可选择未完成块继续')
+                else:
+                    record.update(status=modules_status(modules), message='所选模块已处理；失败或缺资料的模块单独列出，已保存结果可继续查看')
+                record.update(current_module='', finished_at=self.now())
+                modules_summary(record)
+                self.persist(job)
+        except Exception:
+            with self.lock:
+                for module in modules.values():
+                    if module['status'] in ('running', 'pending'):
+                        module.update(status='interrupted', message='本次处理或保存中断，可选择本块重试')
+                record.update(status='interrupted', current_module='', finished_at=self.now(),
+                              message='模块处理或保存中断；请重新打开项目核对已保存模块')
+                modules_summary(record)
+                try:
+                    self.persist(job)
+                except Exception:
+                    record['message'] = '结果未能保存；项目可能正在同步，请重新打开后核对'
 
     def persist(self, job, translations=None):
         with self.lock:
@@ -378,6 +688,8 @@ class AIJobs:
             self.store.save(project, project['revision'])
 
     def work(self, job):
+        if job['record'].get('schema_version') == 2:
+            return self.work_modules(job)
         record = job['record']
         try:
             payload = {'product': job['product'], 'scope': record['scope'], 'evidence': record['evidence_snapshot']}
