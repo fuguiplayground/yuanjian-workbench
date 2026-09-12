@@ -50,11 +50,11 @@ function harness(hash = '') {
   assert.equal(h.run('quick.platforms.join(",")'), 'xhs,reddit');
 
   assert.deepEqual(JSON.parse(h.run('JSON.stringify(NAV.map(([id,,label])=>[id,label]))')),
-    [['keywords','1. 关键词整理'],['audience','2. 人群与场景'],['tower','3. 千机塔洞察'],['strategy','4. 人群策略'],['content','5. 内容与验证']]);
+    [['research','1. 下拉词采集'],['keywords','2. 关键词清洗'],['audience','3. 人群与场景'],['tower','4. 千机塔洞察'],['strategy','5. 人群策略'],['content','6. 内容与验证']]);
   for (const page of ['research','keywords','posts','insights']) assert.equal(h.run(`primaryPage('${page}')`),page);
   assert.equal(h.run("routePage('unknown')"), 'research');
   for (const [page,view,active] of [
-    ['research','research',null], ['keywords','keywordWorkspace','keywords'],
+    ['research','research','research'], ['keywords','keywordWorkspace','keywords'],
     ...['audience','tower','strategy','content'].map(page=>[page,'audienceWorkspace',page]),
     ['insights','insightWorkspace',null], ['products','marketWatch',null],
     ['report','reportWorkspace',null], ['guide','guide',null], ['overview','overview',null]
@@ -62,8 +62,8 @@ function harness(hash = '') {
     h.run(`goto('${page}')`);
     assert.equal(h.elements.get('#content').innerHTML, 'view:'+view, `${page} must dispatch to its real mapped view`);
     const nav = h.elements.get('#nav').innerHTML;
-    assert.equal((nav.match(/data-action="navigate"/g)||[]).length, 5);
-    assert.doesNotMatch(nav, /data-page="(?:guide|overview|research|insights|posts|products|report)"/);
+    assert.equal((nav.match(/data-action="navigate"/g)||[]).length, 6);
+    assert.doesNotMatch(nav, /data-page="(?:guide|overview|insights|posts|products|report)"/);
     const highlighted = [...nav.matchAll(/<button class="active"[^>]*data-page="([^"]+)"/g)].map(match=>match[1]);
     assert.deepEqual(highlighted, active?[active]:[], `${page} must highlight its primary section only`);
   }
@@ -80,5 +80,5 @@ function harness(hash = '') {
   assert.equal(h.run('quick.tab'), 'posts', 'old posts link must survive switching to another project');
   assert.equal(h.elements.get('#content').innerHTML, 'view:research');
 
-  console.log('Navigation: five audience strategy steps, exact highlights, market-watch dispatch and old posts links passed.');
+  console.log('Navigation: six collection-to-strategy steps, exact highlights, market-watch dispatch and old posts links passed.');
 })().catch(error=>{console.error(error);process.exitCode=1});

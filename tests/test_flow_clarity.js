@@ -29,7 +29,7 @@ async function main(){
  assert.match(harness(words).run('nextStep()'),/data-page="keywords"/);
  const posts=fixture();posts.keywords=[];posts.reviews=[];
  assert.match(harness(posts).run('nextStep()'),/data-action="quick-tab"[^>]*data-tab="posts"/);
- assert.match(harness(fixture()).run('nextStep()'),/评论需求/);
+ assert.match(harness(fixture()).run('nextStep()'),/关键词清洗/);
  const settings=harness(null);settings.fire('toggle',{id:'quick-settings',open:true});
  assert.match(settings.run('research()'),/<details[^>]*id="quick-settings"[^>]*open/);
  const first=harness(null).run('research()');

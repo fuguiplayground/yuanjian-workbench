@@ -120,3 +120,4 @@ h1,h2,h3{text-wrap:balance}h1{font-weight:650;letter-spacing:-.8px}
 @media(max-width:800px){.audience-candidates,.tower-grid{grid-template-columns:1fr}.flow-nav{display:none}.sidebar .nav{overflow-x:auto;flex-wrap:nowrap}.sidebar .nav button{flex-shrink:0}.audience-context select{width:100%}.audience-context label{width:100%}}
 .side-bottom .nav-label{display:inline}.side-bottom button{min-height:36px}
 @media(max-width:800px){.side-bottom{display:flex;flex-wrap:wrap;gap:4px}.side-bottom button{font-size:11px;padding:6px 8px}.side-bottom button .nav-label{display:inline!important}}
+.cleaning-steps{display:flex;flex-wrap:wrap;gap:8px 22px;padding:14px 20px 14px 36px;background:#edf3ee;border-radius:10px;font-size:13px;line-height:1.8}.cleaning-steps li{padding-right:6px}

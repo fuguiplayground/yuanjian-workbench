@@ -104,14 +104,14 @@ async function main() {
   await fresh.run("workflowAction('ai-keywords', {})");
   assert.equal(fresh.state.page,'keywords');
   const analysisPage=fresh.run('keywordWorkspace()');
-  assert.match(analysisPage,/<h1>关键词分析<\/h1>/);
+  assert.match(analysisPage,/<h1>关键词清洗<\/h1>/);
   assert.match(analysisPage,/用户在寻找清洗方式。/,'completed analysis is directly readable without choosing another report tab');
   assert.doesNotMatch(analysisPage,/keyword-view|workspace-tabs|id="search-input"/,'keyword analysis no longer duplicates the source library');
   assert.equal((analysisPage.match(/data-action="ai-keywords"/g)||[]).length,1,'the report exposes one analysis action');
   const steps=fresh.run("flowNav('audience')");
-  assert.equal((steps.match(/data-action="navigate"/g)||[]).length,5);
+  assert.equal((steps.match(/data-action="navigate"/g)||[]).length,6);
   assert.match(steps,/class="active" data-action="navigate" data-page="audience"/);
-  assert.match(steps,/人群与场景/);assert.match(steps,/关键词整理/);assert.match(steps,/人群策略/);
+  assert.match(steps,/人群与场景/);assert.match(steps,/关键词清洗/);assert.match(steps,/人群策略/);
   assert.doesNotMatch(steps,/data-page="posts"/);
   assert.match(fresh.run('insightWorkspace()'),/<h1>需求与营销<\/h1>/);
   assert.match(fresh.run('insightWorkspace()'),/生成需求与营销建议/);
