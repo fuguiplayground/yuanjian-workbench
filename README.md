@@ -92,6 +92,7 @@ Windows 将 `python3` 替换为 `.\.venv\Scripts\python.exe`。初始化检查�
 有 Node.js 时可运行前端回归测试，Node 仅用于开发验证：
 
 ```sh
+node "tests/test_action_cards.js"
 node "tests/test_flow_clarity.js"
 node "tests/test_workflow.js"
 node "tests/test_insight_modules.js"

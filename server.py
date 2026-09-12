@@ -120,7 +120,8 @@ def normalize(kind, row, provenance='import'):
                     sales_raw=string(row.get('sales_raw'), 250), sales_period=string(row.get('sales_period'), 100) or '周期未知',
                     sales_kind=string(row.get('sales_kind'), 100) or '未注明',
                     features=[string(f, 500) for f in features[:20]], image=clean_url(row.get('image')),
-                    brand=string(row.get('brand'), 100), candidate=boolean(row.get('candidate', False)))
+                    brand=string(row.get('brand'), 100), candidate=boolean(row.get('candidate', False)),
+                    watched=boolean(row.get('watched', False)))
     elif kind == 'posts':
         if not row.get('id') or not row.get('title') or row.get('platform') not in sources.LABELS:
             raise ValueError('内容必须包含 id、title 和有效 platform')
@@ -762,14 +763,16 @@ def handler_for(store):
                         return self.respond(202, jobs.start(p, body))
                     if action == 'toggle':
                         kind = body.get('kind')
-                        field = 'candidate' if kind == 'products' else 'favorite' if kind == 'keywords' else None
+                        field = body.get('field', 'candidate') if kind == 'products' else 'favorite' if kind == 'keywords' else None
+                        if kind == 'products' and field not in ('candidate', 'watched'):
+                            raise ValueError('不支持的商品标记')
                         if not field:
                             raise ValueError('不支持的操作')
                         record = next((r for r in p[kind] if r['id'] == body.get('id')), None)
                         if not record:
                             raise ValueError('记录不存在')
-                        record[field] = not record[field]
-                        if kind == 'products':
+                        record[field] = not record.get(field, False)
+                        if kind == 'products' and field == 'candidate':
                             p['data_version'] += 1
                     elif action == 'import':
                         rows = body.get('rows')

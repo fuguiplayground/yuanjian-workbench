@@ -35,6 +35,15 @@ async function main(){
  const h=harness();h.set(project());
  assert.match(html,/<script src="\/watch.js"><\/script>/);
  assert.equal(h.run("NAV.some(x=>x[0]==='products'&&x[2]==='竞品研究')"),true);
+ const watched={...product('B000000002','仅关注商品'),watched:true,candidate:false};
+ const candidate={...product('B000000003','仅候选商品'),candidate:true};
+ h.set(project('project-a',[watched,candidate]));
+ h.run("state.filter='watched'");
+ assert.match(h.run('products()'),/data-action="watched"/);
+ assert.doesNotMatch(h.run('products()').split('<div class="compare-dock">')[0],/data-id="B000000003"/);
+ h.run("state.filter='candidate'");
+ assert.doesNotMatch(h.run('products()').split('<div class="compare-dock">')[0],/data-id="B000000002"/);
+ h.set(project());
  let view=h.run('marketWatch()');
  assert.match(view,/查看竞品变化/);assert.match(view,/未开启定时监控/);assert.equal(h.requests.length,0);
  await h.run("runAction('product-history',{dataset:{id:'B000000001'}})");
