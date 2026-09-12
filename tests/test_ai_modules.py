@@ -49,7 +49,7 @@ def module_result(key, evidence):
     if key == 'segments':
         result = module_result('audience', evidence)
         for person in result['audiences']:
-            person.update(buying_motivation=point(ids), life_stage=point([], 'unknown'),
+            person.update(motives={k: point(ids) for k in modules.MOTIVE_KEYS}, buying_motivation=point(ids), life_stage=point([], 'unknown'),
                           marketing={k: point(ids) for k in ('product','channels','content','creators','promotion')})
         return result
     if key == 'audience':
@@ -374,3 +374,44 @@ class ConsumerMotivationIntegrationTests(unittest.TestCase):
         self.assertNotIn('消费动机洞察', ai.module_prompt('clean'))
         self.assertIn('不是实时搜索', prompt)
         self.assertIn('segments 原有 JSON schema', prompt)
+
+class EvidencePipelineTests(unittest.TestCase):
+    def test_cleaning_controls_exact_runner_payload_and_roundtrip(self):
+        p=sample_project()
+        p['keywords'].append({**p['keywords'][0], 'id':'pending', 'text':'待确认词'})
+        evidence=ai.prepare(p, {'kind':'insights'}, ('keywords',), allow_empty=True, include_metrics=True)['evidence_snapshot']
+        items=[{'id':evidence[0]['id'],'valid':True},{'id':evidence[1]['id'],'valid':False}]
+        clean={'status':'success','evidence_snapshot':evidence,'report':{'items':items}}
+        p['ai_reports']=[{'id':'clean-fixture','data_version':p['data_version'],'report':{'modules':{'clean':clean}}}]
+        selected,note=ai.strategy_input(p)
+        self.assertEqual([x['id'] for x in selected['keywords']], [p['keywords'][0]['id']])
+        self.assertEqual(len(p['keywords']),3)
+        self.assertIn('排除 1',note); self.assertIn('复核 1',note)
+        received=[]
+        def runner(system,payload,schema,cancel):
+            received.extend(e['id'] for e in payload['evidence'])
+            return module_result('segments',payload['evidence']),{'model':'offline-test'}
+        store=MemoryStore(p); jobs=ai.AIJobs(store,threading.RLock(),lambda:'f'*16,lambda:'2026-09-12',runner)
+        with patch('ai_jobs.threading.Thread'):
+            public=jobs.start(store.load(p['id']),{'kind':'insights','modules':['segments']})
+        jobs.work(jobs.jobs[public['id']])
+        self.assertEqual(jobs.get(public['id'])['status'],'success')
+        self.assertIn(evidence[0]['id'],received);self.assertNotIn(evidence[1]['id'],received);self.assertNotIn('keywords:pending',received)
+        record=ai.normalize_ai_report(store.p['ai_reports'][-1],store.p)
+        self.assertIn('排除 1',record['report']['modules']['segments']['scope']['selection'])
+        self.assertEqual(set(record['report']['modules']['segments']['report']['audiences'][0]['motives']),set(modules.MOTIVE_KEYS))
+
+    def test_stale_or_mismatched_cleaning_does_not_admit_words(self):
+        p=sample_project(); evidence=ai.prepare(p,{'kind':'insights'},('keywords',),allow_empty=True)['evidence_snapshot']
+        clean={'status':'success','evidence_snapshot':evidence,'report':{'items':[{'id':evidence[0]['id'],'valid':True}]}}
+        p['ai_reports']=[{'id':'clean-fixture','data_version':p['data_version']-1,'report':{'modules':{'clean':clean}}}]
+        self.assertFalse(ai.strategy_input(p)[0]['keywords'])
+        p['ai_reports'][0]['data_version']=p['data_version']; p['keywords'][0]['text']='已改动'
+        self.assertFalse(ai.strategy_input(p)[0]['keywords'])
+
+    def test_old_report_missing_motives_is_unknown_not_inferred(self):
+        evidence=ai.prepare(sample_project(),{'kind':'insights'},allow_empty=True)['evidence_snapshot']
+        report=module_result('segments',evidence);del report['audiences'][0]['motives']
+        with self.assertRaises(ValueError):modules.validate('segments',report,evidence)
+        restored=modules.validate('segments',report,evidence,allow_legacy=True)
+        self.assertTrue(all(v['basis']=='unknown' and not v['evidence_ids'] for v in restored['audiences'][0]['motives'].values()))

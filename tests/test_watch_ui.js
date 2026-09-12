@@ -8,7 +8,7 @@ function harness(){
  const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',textContent:'',scrollIntoView(){this.scrolled=true}});return nodes.get(selector)};
  const context=vm.createContext({document:{querySelector:node},window:{scrollTo(){}},location:{hash:''},
   setTimeout(){return 1},clearTimeout(){},requestAnimationFrame(){},
-  audienceLensWorkspace(){return ''},skillWorkspace(){return ''},businessAction:async()=>false,businessWorkspace(){return ''},audienceWorkspace(){return ''},keywordWorkspace(){return ''},insightWorkspace(){return ''},reportWorkspace(){return ''},guide(){return ''},research(){return ''},jobView(){return ''},
+  audienceLensWorkspace(){return ''},skillWorkspace(){return ''},inputManifestWorkspace(){return ''},evidenceLedgerWorkspace(){return ''},businessAction:async()=>false,businessWorkspace(){return ''},audienceWorkspace(){return ''},keywordWorkspace(){return ''},insightWorkspace(){return ''},reportWorkspace(){return ''},guide(){return ''},research(){return ''},jobView(){return ''},
   async fetch(path,options){requests.push({path,options});assert.ok(responses.length,'Only an explicit refresh may request history');return responses.shift()(path,options)}});
  vm.runInContext(fs.readFileSync('web/workflow.js','utf8').split('\n').find(x=>x.startsWith('const AUDIENCE_STEPS=')),context);vm.runInContext(script,context);vm.runInContext(inline,context);
  return {context,nodes,requests,responses,run:code=>vm.runInContext(code,context),

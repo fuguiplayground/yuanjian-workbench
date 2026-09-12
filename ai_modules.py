@@ -89,9 +89,11 @@ SCHEMAS = {
                   ('no_anxiety', 'narrowest', 'has_contrast', 'real_demand')}, 'note': S})}),
 }
 
+MOTIVE_KEYS = ('environment', 'identity', 'attributes', 'functional_problem', 'emotion', 'social_friction', 'functional_expectation', 'emotional_expectation', 'social_expectation')
+
 # 新模块保留旧画像 schema，不改变已保存历史报告的校验契约。
 SCHEMAS['segments'] = obj({**BASE, 'audiences': arr(obj({**PROFILE['properties'],
-    'buying_motivation': POINT, 'life_stage': POINT,
+    'buying_motivation': POINT, 'life_stage': POINT, 'motives': obj({k: POINT for k in MOTIVE_KEYS}),
     'marketing': obj({k: POINT for k in ('product', 'channels', 'content', 'creators', 'promotion')})})),
     'audience_map': POINT, 'next_steps': arr(POINT)})
 
@@ -206,12 +208,16 @@ def metrics(kind, row):
     return {key: row.get(key) if type(row.get(key)) in (int, float) and math.isfinite(row[key]) else None for key in keys}
 
 
-def validate(key, report, evidence):
+def validate(key, report, evidence, allow_legacy=False):
     report = copy.deepcopy(report)
     if not isinstance(report, dict):
         raise ValueError('AI 模块必须返回结构化报告')
     for derived in ('stats', 'topic_map', 'journey'):
         report.pop(derived, None)
+    if key == 'segments' and allow_legacy:
+        for person in report.get('audiences', []):
+            if 'motives' not in person:
+                person['motives'] = {k: {'text': '旧报告未独立分析此项', 'basis': 'unknown', 'evidence_ids': [], 'validation': '补充原文并重新生成消费动机分析。'} for k in MOTIVE_KEYS}
     check_schema(report, SCHEMAS[key])
     allowed = {e['id']: e for e in evidence}
     if any(e['kind'] not in MODULES[key]['collections'] for e in evidence):

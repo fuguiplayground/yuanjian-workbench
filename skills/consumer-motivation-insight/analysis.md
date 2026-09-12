@@ -24,3 +24,6 @@ audience_map 解释为什么同一关键词/身份下需要拆分，以及哪些
 不是实时搜索：不得声称执行原 xhs-search 的远程检索、拥有其数据库或返回 ES 分数。
 需要补充证据时，在 validation_questions 给出2至4条带维度前缀的检索建议，例如“环境：办公室”“问题：清洗费时”“期望：省时”。这是建议，不是已执行的查询。
 继续遵守 segments 原有 JSON schema，不新增顶层字段；所有分析引用保持本模块 evidence_ids，未知项保留验证步骤。
+
+## 独立动机字段
+现在为每个人群输出 motives 对象，分别填写 environment、identity、attributes、functional_problem、emotion、social_friction、functional_expectation、emotional_expectation、social_expectation。每项独立提供 text、basis、evidence_ids、validation；未知也要明确标注，不从其他字段强行拆分。旧字段用于兼容和总体叙述，不代替这些独立记录。

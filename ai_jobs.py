@@ -301,6 +301,31 @@ def module_keys(value):
     return [key for key in ai_modules.MODULE_ORDER if key in value]
 
 
+def strategy_input(project, clean=None):
+    """清洗判定与原词快照一致才准入；原帖评论独立保留，绝不删除源资料。"""
+    if clean is None:
+        for report in reversed(project.get('ai_reports', [])):
+            candidate = report.get('report', {}).get('modules', {}).get('clean')
+            if candidate and candidate.get('status') == 'success':
+                clean = candidate if report.get('data_version') == project['data_version'] else None
+                break
+    current = {('keywords:' + row['id']): row for row in project.get('keywords', [])}
+    valid, excluded = set(), set()
+    if clean and clean.get('status') == 'success':
+        snapshot = {e['id']: e for e in clean.get('evidence_snapshot', [])}
+        for item in clean.get('report', {}).get('items', []):
+            row, evidence = current.get(item['id']), snapshot.get(item['id'])
+            if not row or not evidence or evidence.get('text_truncated') or evidence.get('text') != raw_text('keywords', row):
+                continue
+            if any((row.get(k) or '') != (evidence.get(k) or '') for k in ('platform', 'source', 'market_scope', 'provenance')):
+                continue
+            (valid if item.get('valid') is True else excluded).add(item['id'])
+    selected = copy.deepcopy(project)
+    selected['keywords'] = [r for r in project.get('keywords', []) if 'keywords:' + r['id'] in valid]
+    note = f"策略输入：清洗纳入 {len(valid)} 词，排除 {len(excluded)} 词，待清洗/复核 {len(current)-len(valid)-len(excluded)} 词；原帖和评论独立取样。"
+    return selected, note
+
+
 def module_prompt(key):
     return ai_modules.system_prompt(key, PROMPTS['prompts'], GUARD)
 
@@ -451,7 +476,7 @@ def normalize_modules_report(record, project):
         module.update(key=key, label=ai_modules.MODULES[key]['label'], status=state, data_version=version,
                       scope=clean_scope(old['scope']), evidence_snapshot=copy.deepcopy(evidence),
                       usage=safe_usage(old.get('usage')),
-                      report=ai_modules.validate(key, old.get('report'), evidence) if state == 'success' else None)
+                      report=ai_modules.validate(key, old.get('report'), evidence, allow_legacy=True) if state == 'success' else None)
         if state in ('pending', 'running'):
             module.update(status='interrupted', message='此前模块未完成，可选择本块继续生成')
         result['report']['modules'][key] = module
@@ -590,7 +615,7 @@ class AIJobs:
             project.setdefault('ai_reports', []).append(copy.deepcopy(record))
             self.store.save(project, project['revision'])
             job = {'record': record, 'project_id': project['id'], 'cancel': threading.Event(),
-                   'product': project.get('keyword', ''), 'run_modules': selected}
+                   'product': project.get('keyword', ''), 'run_modules': selected, 'input_project': copy.deepcopy(project)}
             self.jobs[record['id']] = job
             threading.Thread(target=self.work, args=(job,), daemon=True).start()
             return self.get(record['id'])
@@ -603,6 +628,13 @@ class AIJobs:
                 if job['cancel'].is_set():
                     break
                 module = modules[key]
+                if key == 'segments':
+                    clean = modules.get('clean') if 'clean' in job['run_modules'] else None
+                    input_project, selection_note = strategy_input(job['input_project'], clean)
+                    prepared = prepare(input_project, {'kind': 'insights'}, ai_modules.MODULES[key]['collections'], allow_empty=True, include_metrics=True)
+                    module['scope'], module['evidence_snapshot'] = prepared['scope'], prepared['evidence_snapshot']
+                    module['scope']['selection'] = selection_note + module['scope']['selection']
+                    record['scope'], record['evidence_snapshot'] = combined_scope(modules)
                 with self.lock:
                     record['current_module'] = key
                     module.update(status='running', started_at=self.now(), message='正在分析本模块样本')

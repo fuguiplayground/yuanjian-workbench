@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const {harness,fixture}=require('./test_workflow');
+const {reportFixture}=require('./test_insight_modules');
+const p=fixture(),r=reportFixture();p.ai_reports=[r];
+const h=harness(p);
+assert.match(h.run('inputManifestWorkspace()'),/分析资料清单/);
+const m=h.state.project.ai_reports[0].report.modules.audience;
+h.state.project.ai_reports[0].report.modules.segments=JSON.parse(JSON.stringify(m));
+const person=h.state.project.ai_reports[0].report.modules.segments.report.audiences[0];
+person.motives={environment:{text:'真实独立环境字段',basis:'inference',evidence_ids:['keywords:k1'],validation:'<img src=x>核对'}};
+h.state.page='nine';assert.match(h.run('audienceLensWorkspace()'),/真实独立环境字段/);
+const ledger=h.run('evidenceLedgerWorkspace()');assert.match(ledger,/真实独立环境字段/);assert.match(ledger,/SAVED_KEYWORD/);assert.doesNotMatch(ledger,/<img src=x>/);
+const nodes=h.run("insightNodesHtml(insightModuleNodes('segments',selectedInsightReport().report.modules.segments.report,insightModuleContext(selectedInsightReport(),'segments')),insightModuleContext(selectedInsightReport(),'segments'))");assert.match(nodes,/真实独立环境字段/);
+assert.equal(h.calls.length,0);
+console.log('证据工作区：独立动机、真实快照关联、HTML转义、导出字段与零模型调用通过');
