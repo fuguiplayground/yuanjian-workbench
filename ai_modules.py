@@ -1,6 +1,7 @@
 """Versioned, independently grounded analysis modules for the local AI report."""
 import copy
 import math
+from pathlib import Path
 
 
 def obj(properties):
@@ -166,7 +167,10 @@ marketing.promotion 写适配的组合或促销机制、需要确认的成本及
 """
 
 def system_prompt(key, prompts, guard):
-    return guard + prompts[MODULES[key]['prompt']] + COMMON + ADAPTATIONS[key]
+    result = guard + prompts[MODULES[key]['prompt']] + COMMON + ADAPTATIONS[key]
+    if key == 'segments':
+        result += '\n' + (Path(__file__).resolve().parent / 'skills/noumena-xhs-insight/analysis.md').read_text(encoding='utf-8')
+    return result
 
 
 def check_schema(value, schema):

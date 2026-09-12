@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent
 BUILD_ID = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in (
     'business_flow.py', 'server.py', 'sources.py', 'sellersprite.py', 'device_setup.py',
     'credential_store.py', 'collection_jobs.py', 'keyword_expansion.py', 'ai_jobs.py', 'ai_modules.py', 'codex_runner.py',
-    'prompts/sanjin.json'))).hexdigest()
+    'prompts/sanjin.json', 'skills/noumena-xhs-insight/analysis.md'))).hexdigest()
 LOCK = threading.RLock()
 KINDS = ('keywords', 'products', 'posts', 'reviews')
 
