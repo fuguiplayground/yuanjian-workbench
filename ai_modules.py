@@ -169,7 +169,7 @@ marketing.promotion 写适配的组合或促销机制、需要确认的成本及
 def system_prompt(key, prompts, guard):
     result = guard + prompts[MODULES[key]['prompt']] + COMMON + ADAPTATIONS[key]
     if key == 'segments':
-        result += '\n' + (Path(__file__).resolve().parent / 'skills/noumena-xhs-insight/analysis.md').read_text(encoding='utf-8')
+        result += '\n' + (Path(__file__).resolve().parent / 'skills/consumer-motivation-insight/analysis.md').read_text(encoding='utf-8')
     return result
 
 

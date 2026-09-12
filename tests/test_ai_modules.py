@@ -366,11 +366,11 @@ class SegmentStrategyTests(unittest.TestCase):
             modules.validate('segments', result, evidence)
 
 
-class NoumenaIntegrationTests(unittest.TestCase):
+class ConsumerMotivationIntegrationTests(unittest.TestCase):
     def test_actual_prompt_loads_adapter_only_for_segments(self):
         prompt = ai.module_prompt('segments')
-        for word in ('Noumena 九维洞察', '物理环境', '社交困扰', '社交期望'):
+        for word in ('消费动机洞察', '物理环境', '社交困扰', '社交期望'):
             self.assertIn(word, prompt)
-        self.assertNotIn('Noumena 九维洞察', ai.module_prompt('clean'))
+        self.assertNotIn('消费动机洞察', ai.module_prompt('clean'))
         self.assertIn('不是实时搜索', prompt)
         self.assertIn('segments 原有 JSON schema', prompt)
