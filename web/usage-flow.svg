@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">远见工作台使用流程：关键词洞察、电商盯盘、报告与选品</title>
+  <desc id="description">先在关键词洞察采集资料、分析关键词、生成需求与营销建议；再到电商盯盘按需查询竞品历史；最后查看选品依据并导出。未开启定时监控。</desc>
+  <rect width="1200" height="630" rx="16" fill="#f7f9fc"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" fill="#20242a">
+    <text x="44" y="57" font-size="26" font-weight="600">从一个产品词开始</text>
+    <text x="44" y="88" font-size="15" fill="#737b85">先了解用户需求，再核对竞品，最后保存选品依据。所有资料都在同一个项目。</text>
+    <text x="44" y="139" font-size="19" font-weight="600">01 关键词洞察</text>
+    <g font-size="18" font-weight="600">
+      <text x="44" y="184">采集资料</text>
+      <text x="424" y="184">关键词分析</text>
+      <text x="804" y="184">需求与营销</text>
+    </g>
+    <g font-size="14" fill="#687480">
+      <text x="44" y="217">输入中文产品词，多选平台采关键词</text>
+      <text x="44" y="243">小红书 / TikTok / Reddit / Amazon</text>
+      <text x="44" y="269">挑内容、采评论；英文可翻译成中文</text>
+      <text x="424" y="217">生成关键词报告，查看搜索意图与主题</text>
+      <text x="424" y="243">点「搜这组词」，继续采集相关内容</text>
+      <text x="424" y="269">「返回关键词资料」可查看原词库</text>
+      <text x="804" y="217">点「生成需求与营销建议」</text>
+      <text x="804" y="243">看人群、顾虑、场景和营销切入点</text>
+      <text x="804" y="269">点「查看依据」回看原文</text>
+    </g>
+    <g stroke="#aebbc9" stroke-width="1.5" fill="none">
+      <path d="M353 177h36m-6-6 6 6-6 6M733 177h36m-6-6 6 6-6 6"/>
+      <path d="M44 314h1112"/>
+    </g>
+    <text x="44" y="363" font-size="19" font-weight="600">02 电商盯盘</text>
+    <text x="280" y="363" font-size="17">找竞品 → 加入候选、比较商品 → 按需查看历史变化</text>
+    <text x="280" y="397" font-size="14" fill="#687480">近 90 天价格、BSR 与评分记录；月度父子体销量为供应商估算，月份以返回为准。</text>
+    <text x="280" y="423" font-size="14" fill="#1765d1">手动读取或更新，每次最多 2 次 MCP 查询。未开启定时监控。</text>
+    <path d="M44 456h1112" stroke="#dbe1e8"/>
+    <text x="44" y="505" font-size="19" font-weight="600">03 报告与选品</text>
+    <text x="280" y="505" font-size="17">整理选品依据与缺口 → 查看已有报告 → 导出报告或完整项目包</text>
+    <text x="280" y="537" font-size="14" fill="#687480">完整报告保留结论、原文与历史；项目包可在另一台设备恢复，接着使用。</text>
+    <text x="44" y="591" font-size="13" fill="#737b85">分析与翻译由本机调用已登录的 Codex，样本发送至模型服务。补采后可重新分析，旧报告与原文继续保留。</text>
+  </g>
+</svg>
