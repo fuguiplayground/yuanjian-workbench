@@ -43,12 +43,23 @@ class KeywordQueue:
             return
         query = ' '.join(query.split())
         mark = normalized(query)
-        if not query or len(query) > 300 or mark in self.seen or mark in self.executed:
+        if not query or len(query) > 300 or mark in self.executed:
             return
-        # Keep the queue finite even if a supplier returns thousands of suggestions.
+        if mark in self.seen:
+            previous = next((item for item in self.pending if normalized(item[2]['query']) == mark), None)
+            if previous is None or previous[0] <= round_:
+                return
+            self.pending.remove(previous)
+            heapq.heapify(self.pending)
+        # Retain earlier rounds when suggestions fill the bounded queue.
         if len(self.pending) >= MAX_REQUESTS:
             self.capped = True
-            return
+            last = max(self.pending)
+            if round_ >= last[0]:
+                return
+            self.pending.remove(last)
+            self.seen.remove(normalized(last[2]['query']))
+            heapq.heapify(self.pending)
         self.seen.add(mark)
         self.sequence += 1
         target = {'query': query, 'original_query': original, 'round': round_,

@@ -4,7 +4,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -113,6 +115,7 @@ class PublicInitializationTests(PublicFixture):
         connection.assert_not_called()
         launch.assert_called_once_with()
 
+    @unittest.skipUnless(os.name == 'posix' and shutil.which('bash'), '需要 POSIX 环境及 Bash 运行 macOS 启动脚本')
     def test_mac_entry_has_no_default_project_and_preserves_explicit_arguments(self):
         script = ROOT / '打开工作台.command'
         command = 'python3() { printf "%s\\n" "$@"; }; export -f python3; bash "$1" "${@:2}"'

@@ -1,5 +1,7 @@
 import errno
 import json
+import os
+import socket
 import sys
 import tempfile
 import threading
@@ -64,6 +66,24 @@ class StartupTests(unittest.TestCase):
             identity = app.server_identity(app.Store(other))
             self.assertFalse(app.is_current_workbench(existing.server_port, identity))
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows 专用的端口独占回归')
+    def test_windows_listener_rejects_other_reusable_bind(self):
+        existing = app.LocalHTTPServer(('127.0.0.1', 0), app.handler_for(self.store))
+        self.addCleanup(existing.server_close)
+        self.assertFalse(existing.allow_reuse_address)
+        self.assertEqual(existing.socket.getsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE), 1)
+        with socket.socket() as duplicate:
+            duplicate.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            with self.assertRaises(OSError):
+                duplicate.bind(('127.0.0.1', existing.server_port))
+
+    @unittest.skipUnless(os.name != 'nt', 'POSIX 地址重用行为回归')
+    def test_posix_listener_keeps_address_reuse_enabled(self):
+        existing = app.LocalHTTPServer(('127.0.0.1', 0), app.handler_for(self.store))
+        self.addCleanup(existing.server_close)
+        self.assertTrue(existing.allow_reuse_address)
+        self.assertEqual(existing.socket.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR), 1)
+
     def test_old_build_is_not_reused(self):
         existing = self.run_server()
         identity = {**app.server_identity(self.store), 'build': 'newer-build'}
@@ -71,7 +91,7 @@ class StartupTests(unittest.TestCase):
 
     def test_reuses_fallback_before_binding_new_preferred_port(self):
         with patch.object(app, 'is_current_workbench', side_effect=lambda port, _: port == 8767), \
-             patch.object(app, 'ThreadingHTTPServer') as bind:
+             patch.object(app, 'LocalHTTPServer') as bind:
             result, url = app.bind_or_reuse(8765, self.store)
             self.assertIsNone(result)
             self.assertEqual(url, 'http://127.0.0.1:8767')
@@ -79,7 +99,7 @@ class StartupTests(unittest.TestCase):
 
     def test_permission_failure_is_not_treated_as_port_conflict(self):
         with patch.object(app, 'is_current_workbench', return_value=False), \
-             patch.object(app, 'ThreadingHTTPServer', side_effect=PermissionError(errno.EACCES, 'denied')) as bind:
+             patch.object(app, 'LocalHTTPServer', side_effect=PermissionError(errno.EACCES, 'denied')) as bind:
             with self.assertRaises(PermissionError):
                 app.bind_or_reuse(8765, self.store)
             self.assertEqual(bind.call_count, 1)

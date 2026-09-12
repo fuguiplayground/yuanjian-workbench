@@ -203,7 +203,7 @@ function reportMarkdown(r){
 }
 async function workflowAction(action,el){switch(action){
 case'ai-keywords':await startAI('keywords');return true;
-case'ai-insights':goto('insights');return true;
+case'ai-insights':closeModal();goto('insights');return true;
 case'generate-insight-modules':{const modules=selectedInsightModules();if(!modules.length)throw Error('请至少选择一项有资料的分析');await startAI('insights','',[],{modules});return true}
 case'rerun-insight-module':{const r=(state.project.ai_reports||[]).find(x=>x.id===el.dataset.report),key=el.dataset.module;if(!isModularInsight(r)||!insightModuleKeys(r).includes(key))throw Error('报告或分析项不存在');if(r.data_version!==state.project.data_version)throw Error('资料已更新，请重新勾选需要的分析项生成，旧报告仍会保留');if(!moduleSourceCount(INSIGHT_MODULES.find(x=>x.key===key).source))throw Error('请先补充本项需要的资料');await startAI('insights','',[],{modules:[key],base_report_id:r.id});return true}
 case'insight-section':document.getElementById(el.dataset.section)?.scrollIntoView({behavior:'smooth',block:'start'});return true;

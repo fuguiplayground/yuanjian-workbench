@@ -183,6 +183,16 @@ async function main() {
   await assert.rejects(emptyPost.run("workflowAction('translate-reviews', {dataset:{postId:'missing'}})"),/没有可翻译/);
   assert.equal(emptyPost.calls.length,0);
 
+  const commentInsight=harness();
+  await commentInsight.run("collectAction('post-comments', {dataset:{id:'p1'}})");
+  assert.equal(commentInsight.state.modal,true);
+  const insightAction=commentInsight.modal().footer.match(/data-action="(ai-insights)"/)?.[1];
+  assert.equal(insightAction,'ai-insights','the comment modal links to insight selection');
+  await commentInsight.run(`workflowAction('${insightAction}', {})`);
+  assert.equal(commentInsight.state.page,'insights');
+  assert.equal(commentInsight.state.modal,false,'entering insight selection closes the comment modal');
+  assert.equal(commentInsight.posts('/ai').length,0,'opening insight selection does not start analysis');
+
   const saved=fixture();
   const evidence=(kind,id,text,extra={})=>({id:kind+':'+id,kind,row_id:id,text,platform:'reddit',source:'fixture',text_truncated:false,...extra});
   const keywordSnapshot=[evidence('keywords','k1','OLD_KEYWORD'),evidence('keywords','k2','MISSING_KEYWORD')];

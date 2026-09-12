@@ -63,6 +63,50 @@ class ExpansionQueueTests(unittest.TestCase):
         self.assertEqual(list(quick), [])
         self.assertFalse(quick.capped)
 
+    def test_high_fanout_keeps_every_seeds_first_round_before_recursive_queries(self):
+        for mode in ('az', 'intent'):
+            with self.subTest(mode=mode):
+                queue = KeywordQueue(['first', 'second'], mode, 2, 500, 'xhs')
+                observed = []
+                for target in queue:
+                    query = target['query']
+                    if not queue.prepare(target, query):
+                        continue
+                    queue.used += 1
+                    observed.append(target)
+                    if query == 'first':
+                        queue.extend(target, query, [{'text': f'child {i}'} for i in range(5000)])
+                    self.assertLessEqual(len(queue.pending), 500)
+                self.assertEqual([target['round'] for target in observed], [1] * 54 + [2] * 446)
+                for seed in ('first', 'second'):
+                    self.assertEqual({target['query'] for target in observed if target['round'] == 1 and
+                                      target['original_query'] == seed},
+                                     {seed, *(query for query, _ in first_round(seed, mode, 'xhs'))})
+                self.assertEqual(queue.used, 500)
+                self.assertEqual(len({target['query'] for target in observed}), 500)
+                self.assertTrue(queue.capped)
+
+    def test_pending_suggestion_is_promoted_to_another_seeds_first_round(self):
+        queue = KeywordQueue(['first', 'second'], 'intent', 2, 100, 'xhs')
+        observed = []
+        for target in queue:
+            query = target['query']
+            if not queue.prepare(target, query):
+                continue
+            queue.used += 1
+            observed.append(target)
+            if query == 'first':
+                queue.extend(target, query, [{'text': ' SECOND  review '}])
+            elif query == 'second review':
+                queue.extend(target, query, [{'text': 'grandchild'}])
+        self.assertEqual([target['round'] for target in observed], [1] * 54 + [2])
+        review = [target for target in observed if target['query'].casefold() == 'second review']
+        self.assertEqual(len(review), 1)
+        self.assertEqual((review[0]['round'], review[0]['original_query'], review[0]['expansion']),
+                         (1, 'second', 'suffix'))
+        self.assertEqual((observed[-1]['query'], observed[-1]['parent_query']), ('grandchild', 'second review'))
+        self.assertFalse(queue.capped)
+
 
 class ExpansionJobTests(unittest.TestCase):
     def setUp(self):

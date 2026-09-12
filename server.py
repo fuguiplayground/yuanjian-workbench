@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import re
+import socket
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -811,6 +812,16 @@ def is_current_workbench(port, identity):
         return False
 
 
+class LocalHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = os.name != 'nt'
+
+    def server_bind(self):
+        if os.name == 'nt':
+            # Windows SO_REUSEADDR can let two listeners bind the same port.
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def bind_or_reuse(port, store):
     ports = range(port, min(port + 10, 65536))
     identity = server_identity(store)
@@ -822,7 +833,7 @@ def bind_or_reuse(port, store):
     handler = handler_for(store)
     for candidate in ports:
         try:
-            server = ThreadingHTTPServer(('127.0.0.1', candidate), handler)
+            server = LocalHTTPServer(('127.0.0.1', candidate), handler)
             return server, f'http://127.0.0.1:{server.server_port}'
         except OSError as error:
             if error.errno != errno.EADDRINUSE:
