@@ -32,6 +32,10 @@ const {reportFixture}=require('./test_insight_modules');
  assert.match(h.run('audienceWorkspace()'),/PRODUCT_1/);assert.doesNotMatch(h.run('audienceWorkspace()'),/PRODUCT_0/);
  for(const page of ['nine','tower','content']){h.state.page=page;const html=h.run('audienceLensWorkspace()');assert.doesNotMatch(html,/undefined|\[object Object\]/);assert.match(html,/strategy-audience/);}
  assert.match(h.run('skillWorkspace()'),/原始私有检索数据库未接入/);
+ assert.match(h.run('skillWorkspace()'),/消费动机洞察/);
+ for(const page of ['audience','strategy']){h.state.page=page;assert.doesNotMatch(h.run('audienceWorkspace()'),/Noumena|九维|woyaozanzan/i);}
+ h.state.page='nine';assert.match(h.run('audienceLensWorkspace()'),/消费动机洞察/);
+ assert.doesNotMatch(h.run('skillWorkspace()'),/Noumena|九维|woyaozanzan/i);
  const empty=harness(fixture());empty.state.page='strategy';assert.match(empty.run('audienceWorkspace()'),/把词背后的人/);
  assert.match(empty.run('audienceWorkspace()'),/material-ledger/);assert.match(empty.run('audienceWorkspace()'),/当前资料预览/);
  await empty.run("workflowAction('prepare-audience-flow',{})");assert.equal(empty.calls.length,0);
