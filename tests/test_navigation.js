@@ -14,7 +14,7 @@ function line(source, prefix) {
 
 function harness(hash = '') {
   const elements = new Map(), listeners = {}, calls = [];
-  const pages = ['businessWorkspace','audienceWorkspace', 'overview', 'keywordWorkspace', 'research', 'marketWatch', 'insightWorkspace', 'reportWorkspace', 'guide'];
+  const pages = ['audienceLensWorkspace','skillWorkspace','businessWorkspace','audienceWorkspace', 'overview', 'keywordWorkspace', 'research', 'marketWatch', 'insightWorkspace', 'reportWorkspace', 'guide'];
   const project = id => ({id, name:'饮水机', keyword:'宠物饮水机', data_version:1, updated_at:'2026-09-12',
     runs:[{mode:'collection',kind:'keywords',platforms:['xhs','reddit']}], demo:false});
   const context = vm.createContext({console, URLSearchParams, location:{hash},
@@ -49,26 +49,23 @@ function harness(hash = '') {
   assert.equal(h.run('state.project.id'), 'project-a');
   assert.equal(h.run('quick.platforms.join(",")'), 'xhs,reddit');
 
-  assert.deepEqual(JSON.parse(h.run('JSON.stringify(NAV.map(([id,,label])=>[id,label]))')),
-    [['keywords','1. 整理词库'],['audience','2. 拆分人群'],['strategy','3. 分人群策略']]);
-  for (const page of ['research','keywords','posts']) assert.equal(h.run(`primaryPage('${page}')`),'keywords');
-  assert.equal(h.run("routePage('unknown')"), 'keywords');
-  for (const [page,view,active] of [
-    ['research','research','keywords'], ['keywords','keywordWorkspace','keywords'],
-    ['audience','audienceWorkspace','audience'], ['strategy','audienceWorkspace','strategy'],
-    ['tower','audienceWorkspace','audience'], ['content','audienceWorkspace','strategy'],
-    ['brief','keywordWorkspace','keywords'], ['materials','keywordWorkspace','keywords'],
-    ['opportunities','audienceWorkspace','audience'], ['feedback','audienceWorkspace','strategy'],
-    ['insights','insightWorkspace','audience'], ['products','marketWatch',null],
-    ['report','reportWorkspace',null], ['guide','guide',null], ['overview','overview',null]
-  ]) {
+  assert.equal(h.run('NAV.length'),11);
+  assert.equal(h.run('new Set(NAV.map(x=>x[3])).size'),4);
+  assert.equal(h.run("routePage('unknown')"),'keywords');
+  for(const [page,view,active] of [
+    ['research','research','research'],['keywords','keywordWorkspace','keywords'],['evidence','research','evidence'],
+    ['nine','audienceLensWorkspace','nine'],['audience','audienceWorkspace','audience'],['tower','audienceLensWorkspace','tower'],
+    ['strategy','audienceWorkspace','strategy'],['content','audienceLensWorkspace','content'],['skills','skillWorkspace','skills'],
+    ['products','marketWatch','products'],['report','reportWorkspace','report'],['insights','insightWorkspace','report'],
+    ['brief','keywordWorkspace','keywords'],['feedback','audienceWorkspace','strategy'],['guide','guide',null]
+  ]){
     h.run(`goto('${page}')`);
-    assert.equal(h.elements.get('#content').innerHTML, 'view:'+view, `${page} must dispatch to its real mapped view`);
-    const nav = h.elements.get('#nav').innerHTML;
-    assert.equal((nav.match(/data-action="navigate"/g)||[]).length, 3);
-    assert.doesNotMatch(nav, /data-page="(?:guide|overview|insights|posts|products|report|brief|feedback)"/);
-    const highlighted = [...nav.matchAll(/<button class="active"[^>]*data-page="([^"]+)"/g)].map(match=>match[1]);
-    assert.deepEqual(highlighted, active?[active]:[], `${page} must highlight its primary section only`);
+    assert.equal(h.elements.get('#content').innerHTML,'view:'+view);
+    const nav=h.elements.get('#nav').innerHTML;
+    assert.equal((nav.match(/nav-group-title/g)||[]).length,4);
+    assert.equal((nav.match(/data-action="navigate"/g)||[]).length,11);
+    const highlighted=[...nav.matchAll(/<button class="active"[^>]*data-page="([^"]+)"/g)].map(x=>x[1]);
+    assert.deepEqual(highlighted,active?[active]:[]);
   }
 
   h.run("quick.tab='keywords'; goto('posts')");

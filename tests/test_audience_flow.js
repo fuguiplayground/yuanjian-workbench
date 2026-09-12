@@ -30,6 +30,8 @@ const {reportFixture}=require('./test_insight_modules');
  assert.match(h.run('audienceWorkspace()'),/PRODUCT_0/);assert.doesNotMatch(h.run('audienceWorkspace()'),/PRODUCT_1/);
  await h.run("workflowAction('choose-audience',{dataset:{index:'1'}})");
  assert.match(h.run('audienceWorkspace()'),/PRODUCT_1/);assert.doesNotMatch(h.run('audienceWorkspace()'),/PRODUCT_0/);
+ for(const page of ['nine','tower','content']){h.state.page=page;const html=h.run('audienceLensWorkspace()');assert.doesNotMatch(html,/undefined|\[object Object\]/);assert.match(html,/strategy-audience/);}
+ assert.match(h.run('skillWorkspace()'),/原始私有检索数据库未接入/);
  const empty=harness(fixture());empty.state.page='strategy';assert.match(empty.run('audienceWorkspace()'),/把词背后的人/);
  assert.match(empty.run('audienceWorkspace()'),/material-ledger/);assert.match(empty.run('audienceWorkspace()'),/当前资料预览/);
  await empty.run("workflowAction('prepare-audience-flow',{})");assert.equal(empty.calls.length,0);
