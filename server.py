@@ -28,7 +28,7 @@ from ai_jobs import AIJobs, normalize_ai_report
 ROOT = Path(__file__).resolve().parent
 BUILD_ID = hashlib.sha256(b''.join((ROOT / name).read_bytes() for name in (
     'server.py', 'sources.py', 'sellersprite.py', 'device_setup.py',
-    'credential_store.py', 'collection_jobs.py', 'ai_jobs.py', 'codex_runner.py',
+    'credential_store.py', 'collection_jobs.py', 'keyword_expansion.py', 'ai_jobs.py', 'ai_modules.py', 'codex_runner.py',
     'prompts/sanjin.json'))).hexdigest()
 LOCK = threading.RLock()
 KINDS = ('keywords', 'products', 'posts', 'reviews')
@@ -95,6 +95,11 @@ def normalize(kind, row, provenance='import'):
                     favorite=boolean(row.get('favorite', False)),
                     data_type=row.get('data_type') if row.get('data_type') in ('ai', 'market') else 'suggestion',
                     search_volume=number(row.get('search_volume')), search_period=string(row.get('search_period'), 100))
+        if 'round' in row:
+            round_ = count_value(row['round'])
+            if not 1 <= round_ <= 6 or row.get('expansion') not in ('seed', 'az', 'prefix', 'suffix', 'suggestion'):
+                raise ValueError('关键词采集轮次或扩词方式无效')
+            base.update(round=round_, parent_query=string(row.get('parent_query'), 300), expansion=row['expansion'])
     elif kind == 'products':
         if not row.get('id'):
             raise ValueError('商品必须包含唯一 id，例如 ASIN')
@@ -345,10 +350,14 @@ def import_rows(p, kind, rows, provenance=None, record_run=True):
 
 def restore_collection_details(original, restored, project):
     allowed = {'xhs', 'tiktok', 'reddit', 'amazon'}
+    advanced = restored['kind'] == 'keywords' and original.get('keyword_mode') in ('az', 'intent')
+    max_requests = 500 if advanced else 20
+    if len(original.get('page_results', [])) > max_requests:
+        raise ValueError('采集页面数量超出预算范围')
     def errors(rows):
         return [{**{'row': count_value(e.get('row', 0)), 'reason': string(e.get('reason'), 300)},
                  **{k: string(e[k], 300) if k != 'http' else e[k]
-                    for k in ('platform', 'query', 'http') if k in e}} for e in rows[:200]]
+                    for k in ('platform', 'query', 'http') if k in e}} for e in rows[:max(200, max_requests)]]
     restored['errors'] = errors(original.get('errors', []))
     if 'platforms' in original:
         platforms = original['platforms']
@@ -363,6 +372,10 @@ def restore_collection_details(original, restored, project):
                                   note=string(b.get('note'), 500))
         if sum(restored['budget'][k] for k in ('tikhub_requests', 'mcp_queries')) != restored['request_limit']:
             raise ValueError('采集请求预算不一致')
+        if 'translation_requests' in b:
+            restored['budget']['translation_requests'] = count_value(b['translation_requests'])
+            if restored['budget']['translation_requests'] > restored['budget']['tikhub_requests']:
+                raise ValueError('翻译预留超过 TikHub 预算')
     if 'platform_results' in original:
         summaries = []
         for x in original['platform_results']:
@@ -372,28 +385,110 @@ def restore_collection_details(original, restored, project):
             summary.update(platform=x['platform'], status=string(x.get('status'), 30),
                            errors=errors(x.get('errors', [])),
                            query_pairs=[{k: string(pair[k], 300) for k in ('original', 'query', 'post_id') if k in pair}
-                                        for pair in x.get('query_pairs', [])[:20]])
+                                        for pair in x.get('query_pairs', [])[:max_requests]])
+            if 'keyword_mode' in original:
+                summary.update(query_limit=count_value(x.get('query_limit', 0)),
+                               current_round=count_value(x.get('current_round', 0)),
+                               capped=x.get('capped') is True, stop_reason=string(x.get('stop_reason'), 30))
             summaries.append(summary)
         if [x['platform'] for x in summaries] != restored.get('platforms'):
             raise ValueError('采集摘要与平台列表不一致')
         if any(sum(x[k] for x in summaries) != restored[k] for k in ('pages', 'requests', 'imported', 'duplicates')):
             raise ValueError('各平台采集计数不一致')
         restored['platform_results'] = summaries
-    if not 0 <= restored['requests'] <= restored['request_limit'] <= 20:
+    if not 0 <= restored['requests'] <= restored['request_limit'] <= max_requests:
         raise ValueError('采集请求数超出范围')
+    if 'keyword_mode' in original:
+        mode, rounds = original['keyword_mode'], count_value(original.get('rounds', 1))
+        stop_reasons = ('', 'completed', 'budget', 'cancelled', 'source_blocked', 'error')
+        if restored['kind'] != 'keywords' or mode not in ('quick', 'az', 'intent') or not 1 <= rounds <= 6 or mode == 'quick' and rounds != 1:
+            raise ValueError('采词模式或轮数无效')
+        restored.update(keyword_mode=mode, rounds=rounds, current_round=count_value(original.get('current_round', 0)),
+                        capped=original.get('capped') is True, stop_reason=string(original.get('stop_reason'), 30), round_results=[])
+        if restored['current_round'] > rounds or restored['stop_reason'] not in stop_reasons or not isinstance(original.get('capped'), bool):
+            raise ValueError('采词停止状态或轮次无效')
+        seen_rounds = set()
+        for row in original.get('round_results', []):
+            result = {k: count_value(row[k]) for k in ('round', 'queries', 'new_keywords', 'duplicates')}
+            result.update(platform=row.get('platform'), status=row.get('status'))
+            key = (result['platform'], result['round'])
+            if result['platform'] not in restored.get('platforms', []) or not 1 <= result['round'] <= rounds or key in seen_rounds or result['status'] not in ('running', 'success', 'partial', 'failed', 'cancelled', 'capped', 'interrupted'):
+                raise ValueError('分轮采集记录无效')
+            seen_rounds.add(key)
+            restored['round_results'].append(result)
+        if sum(r['queries'] for r in restored['round_results']) != len(restored['page_results']) or \
+           sum(r['new_keywords'] for r in restored['round_results']) != restored['imported'] or \
+           sum(r['duplicates'] for r in restored['round_results']) != restored['duplicates']:
+            raise ValueError('分轮采集计数不一致')
+        for summary in restored.get('platform_results', []):
+            if not 1 <= summary['query_limit'] <= restored['request_limit'] or summary['current_round'] > rounds or summary['stop_reason'] not in stop_reasons:
+                raise ValueError('平台采词额度或状态无效')
     for page in restored['page_results']:
         if page.get('platform') and page['platform'] not in allowed:
             raise ValueError('采集页面平台无效')
         for field in ('query', 'original_query', 'post_id', 'error'):
             if field in page:
                 page[field] = string(page[field], 500 if field == 'error' else 300)
+        if 'round' in page:
+            page['round'] = count_value(page['round'])
+            page['parent_query'] = string(page.get('parent_query'), 300)
+            if not 1 <= page['round'] <= restored.get('rounds', 1) or page.get('expansion') not in ('seed', 'az', 'prefix', 'suffix', 'suggestion'):
+                raise ValueError('采集页面的扩词来源无效')
         if page.get('post_id') and not any(p['id'] == page['post_id'] and
                 (not page.get('platform') or p['platform'] == page['platform']) for p in project['posts']):
             raise ValueError('采集页面引用了不存在的内容')
+    if 'keyword_mode' in original:
+        summaries = restored.get('platform_results', [])
+        translation_limit = restored.get('budget', {}).get('translation_requests', 0)
+        if not summaries or sum(s['query_limit'] for s in summaries) + translation_limit != restored['request_limit']:
+            raise ValueError('平台查询额度与翻译预留不一致')
+        pages = restored['page_results']
+        for page in pages:
+            if page.get('platform') not in restored.get('platforms', []) or page.get('kind') != 'keywords' or 'round' not in page:
+                raise ValueError('采词页面缺少有效的平台或轮次')
+            for key in ('page', 'returned', 'imported', 'duplicates', 'skipped'):
+                page[key] = count_value(page.get(key))
+            if page['page'] != 1 or page['imported'] + page['duplicates'] > page['returned']:
+                raise ValueError('采词页面计数无效')
+            http = page.get('http')
+            if http is not None and (isinstance(http, bool) or not isinstance(http, int) or not 100 <= http <= 599):
+                raise ValueError('采词页面 HTTP 状态无效')
+            expansion = page['expansion']
+            first_expansions = ('seed',) if mode == 'quick' else ('seed', 'az') if mode == 'az' else ('seed', 'prefix', 'suffix')
+            if expansion not in (first_expansions if page['round'] == 1 else ('suggestion',)):
+                raise ValueError('采词页面的轮次与扩词方式不一致')
+        if sum(p['returned'] for p in pages) != restored['requested'] or \
+           sum(p['imported'] for p in pages) != restored['imported'] or \
+           sum(p['duplicates'] for p in pages) != restored['duplicates'] or \
+           not len(pages) <= restored['requests'] <= len(pages) + translation_limit:
+            raise ValueError('采词页面与任务计数不一致')
+        if len(restored.get('translations', [])) > restored['requests'] - len(pages):
+            raise ValueError('采词翻译记录超过已发出请求数')
+        if restored['current_round'] != (pages[-1]['round'] if pages else 0):
+            raise ValueError('当前轮次与最后查询不一致')
+        grouped = {(r['platform'], r['round']): r for r in restored['round_results']}
+        if set(grouped) != {(p['platform'], p['round']) for p in pages}:
+            raise ValueError('分轮记录与查询页面不对应')
+        for key, result in grouped.items():
+            selected = [p for p in pages if (p['platform'], p['round']) == key]
+            if result['queries'] != len(selected) or result['new_keywords'] != sum(p['imported'] for p in selected) or \
+               result['duplicates'] != sum(p['duplicates'] for p in selected):
+                raise ValueError('分轮采集与对应页面计数不一致')
+        for summary in summaries:
+            selected = [p for p in pages if p['platform'] == summary['platform']]
+            if len(selected) > summary['query_limit'] or not len(selected) <= summary['requests'] <= len(selected) + translation_limit or \
+               summary['pages'] != sum(p.get('http') == 200 and not p.get('error') for p in selected) or \
+               summary['imported'] != sum(p['imported'] for p in selected) or \
+               summary['duplicates'] != sum(p['duplicates'] for p in selected) or \
+               summary['current_round'] != max((p['round'] for p in selected), default=0):
+                raise ValueError('平台摘要与查询页面不一致')
     if restored['status'] == 'running':
         restored['status'] = 'interrupted'
         for row in restored.get('platform_results', []):
             if row['status'] in ('pending', 'running'):
+                row['status'] = 'interrupted'
+        for row in restored.get('round_results', []):
+            if row['status'] == 'running':
                 row['status'] = 'interrupted'
 
 
@@ -455,7 +550,7 @@ def restore_project(original):
         if run.get('mode') == 'collection':
             p['runs'][-1].update(mode='collection', platform=string(run.get('platform'), 30),
                 request_limit=count_value(run.get('request_limit', 0)), requests=count_value(run.get('requests', 0)),
-                note=string(run.get('note')), page_results=[{k: x.get(k) for k in ('page', 'query', 'post_id', 'http', 'returned', 'imported', 'duplicates', 'skipped', 'error', 'platform', 'kind', 'original_query') if k in x} for x in run.get('page_results', [])[:20]])
+                note=string(run.get('note')), page_results=[{k: x.get(k) for k in ('page', 'query', 'post_id', 'http', 'returned', 'imported', 'duplicates', 'skipped', 'error', 'platform', 'kind', 'original_query', 'round', 'parent_query', 'expansion') if k in x} for x in run.get('page_results', [])[:500 if run.get('keyword_mode') in ('az', 'intent') and run['kind'] == 'keywords' else 20]])
             restored = p['runs'][-1]
             restored['translations'] = [{'original': string(x.get('original'), 300), 'translated': string(x.get('translated'), 300), 'method': string(x.get('method') or 'TikHub 机器翻译', 100)} for x in run.get('translations', [])[:20]]
             restore_collection_details(run, restored, p)
@@ -493,7 +588,7 @@ def handler_for(store):
                     return self.respond(200, identity)
                 if path == '/':
                     return self.respond(200, (ROOT / 'web/index.html').read_bytes(), 'text/html; charset=utf-8')
-                if path in ('/usage-flow.svg', '/collection.js', '/research.js', '/workflow.js', '/workflow.css', '/watch.js'):
+                if path in ('/usage-flow.svg', '/collection.js', '/research.js', '/workflow.js', '/workflow.css', '/watch.js', '/keyword-controls.js', '/insight-report.css'):
                     return self.respond(200, (ROOT / 'web' / path[1:]).read_bytes(),
                         'image/svg+xml' if path.endswith('.svg') else 'text/css; charset=utf-8' if path.endswith('.css') else 'text/javascript; charset=utf-8')
                 if path == '/api/ai':

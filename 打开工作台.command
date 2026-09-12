@@ -6,7 +6,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 echo "远见工作台正在启动。使用期间请保留此终端窗口，关闭窗口即停止服务。"
-python3 "team_start.py" --open --project caaaa93ac46840cb "$@"
+python3 "team_start.py" --open "$@"
 result=$?
 if [ "$result" -ne 0 ]; then
   echo "工作台未能启动，请保留上方提示。按回车关闭。"

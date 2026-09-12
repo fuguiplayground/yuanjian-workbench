@@ -168,7 +168,7 @@ def start():
                                      stderr=subprocess.DEVNULL, start_new_session=True)
                     for attempt in range(6):
                         if sender_ready(config):
-                            STATE.update(state='waiting', note='MacBook Air 首次打开会自动接入；本机已准备好连接。')
+                            STATE.update(state='waiting', note='接收设备首次打开会自动接入；本机已准备好连接。')
                             return
                         time.sleep(0.5)
                     STATE.update(state='failed', note='本机自动配置服务未就绪，已保存的本机数据源仍可使用。')
@@ -178,7 +178,7 @@ def start():
             if all(credential_store.read(p) for p in ('tikhub', 'sellersprite')):
                 STATE.update(state='ready', note='两项数据源已在本机配置，重启可自动读取。')
                 return
-            STATE.update(state='receiving', note='正在从 Mac mini 自动配置数据源，请稍候…')
+            STATE.update(state='receiving', note='正在从来源设备自动配置数据源，请稍候…')
             for attempt in range(3):
                 try:
                     receive(config)
@@ -195,7 +195,7 @@ def start():
 
 def status():
     if RECEIPT.exists():
-        return {'state': 'complete', 'note': 'MacBook Air 已完成两项数据源验证与本机保存。'}
+        return {'state': 'complete', 'note': '接收设备已完成两项数据源验证与本机保存。'}
     return dict(STATE)
 
 

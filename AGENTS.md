@@ -14,12 +14,13 @@
 - `team_start.py`：团队版启动入口，在内存中载入团队连接后启动服务。
 - `server.py`：本机 HTTP 服务、项目存储、版本校验及接口。
 - `sources.py`、`sellersprite.py`：数据源适配；`credential_store.py`：系统凭据管理。
-- `collection_jobs.py`、`ai_jobs.py`、`codex_runner.py`：采集任务、分析任务和本机 Codex 调用。
+- `collection_jobs.py`、`keyword_expansion.py`：采集任务、多轮扩词与请求预算。
+- `ai_jobs.py`、`ai_modules.py`、`codex_runner.py`：分析任务、分块报告和本机 Codex 调用。
 - `device_setup.py`：可选的设备接入功能，当前源码包没有设备配置文件。
 - `web/`：界面与静态资源；`prompts/`：分析提示词。
 - `data/projects/`：本地项目版本；`exports/`：业务导出和已有报告。
 - `scripts/check_project.py`：本地初始化验收，可选检查运行中的 HTTP 服务。
-- `codex.local.json`：本机 Codex 可执行文件配置，不进入 Git；当前电脑使用 `.runtime/codex-desktop/codex.exe`，是用户指定桌面程序的同版本运行副本，源路径和 SHA-256 记录在配置中。
+- `codex.local.json`：本机 Codex 可执行文件配置，不进入 Git；如需 `.runtime/` 中的运行副本，先验证源程序与副本 SHA-256 一致。
 - `setup.ps1`、`start.ps1`、`打开工作台.cmd`：Windows 初始化和启动入口。
 
 ## 初始化与运行
@@ -41,10 +42,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 需要由 Codex 保持服务运行且不自动打开系统浏览器时：
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -u .\team_start.py --project caaaa93ac46840cb
+.\.venv\Scripts\python.exe -X utf8 -u .\team_start.py
 ```
 
-macOS 或 Linux 可使用 `python3 team_start.py --open --project caaaa93ac46840cb`。不要绕过团队入口直接启动 `server.py`，否则团队连接不会载入。
+macOS 或 Linux 可使用 `python3 team_start.py --open`。如需指定项目，传入本机实际存在的 `--project`。不要绕过团队入口直接启动 `server.py`，否则团队连接不会载入。
 
 服务只监听 `127.0.0.1`，默认端口 `8765`。程序会识别同一项目目录的已有实例，并在端口占用时尝试后续端口；以启动日志中的实际地址为准，不为腾出端口结束其他应用。终端前台运行时按 `Ctrl+C` 停止。不得将本机服务直接暴露到公网。
 
@@ -55,7 +56,7 @@ macOS 或 Linux 可使用 `python3 team_start.py --open --project caaaa93ac46840
 .\.venv\Scripts\python.exe -X utf8 .\scripts\check_project.py --url http://127.0.0.1:8765
 ```
 
-第一条检查语法、项目版本校验和与读取能力；第二条额外检查健康接口、静态资源、项目列表和所有项目的读取。验证不写业务数据，不调用第三方采集或模型服务。
+第一条检查语法、项目版本校验和与读取能力；公开源码没有业务数据时也可验收，存在私有资料清单时继续严格核对。第二条额外检查健康接口、静态资源、项目列表和所有项目的读取。验证不写业务数据，不调用第三方采集或模型服务。
 
 界面修改后还应在浏览器验证相关页面和移动端布局；后端行为修改后补充与风险相称的验证。涉及存储写入的测试必须使用临时目录，不能以随包项目作测试数据写入目标。没有验证的能力必须如实标注。
 
@@ -75,5 +76,9 @@ macOS 或 Linux 可使用 `python3 team_start.py --open --project caaaa93ac46840
 ## 修改与交付
 
 优先做满足请求的最小改动，保持现有界面语言、业务流程和标准库架构。没有明确需要时不引入框架、数据库或新的运行依赖。
+
+本地在 `main` 开发，以远端 `main` 为基础保留其他成员改动。完成验证和提交清单检查后，按用户授权 commit，通过独立远端分支向上游 `main` 提 PR；没有上游写权限时使用 Fork。禁止用强制重置或 force push 覆盖历史。源码提交不能包含业务数据或私有团队资料。
+
+深度采词、人群画像、分块洞察和报告规范见 `CLAUDE.md`。开发完成后更新 `ROADMAP.md`，将模拟验证与真实第三方调用分开记录。
 
 交付时说明实际改动、可访问地址或启动命令、完成的验证，以及尚未验证的外部能力。只有真实数据和验证结果才能写作结论；演示数据继续保留演示标记。
