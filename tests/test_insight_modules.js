@@ -71,7 +71,7 @@ async function main(){
  for(const key of keys)assert.equal((exported.match(new RegExp('id="insight-v2-report-'+key+'"','g'))||[]).length,1);
  const full=view.run('fullReportHtml()').split('<h2>当前项目资料</h2>');assert.match(full[0],/SAVED_POST_BODY/);assert.doesNotMatch(full[0],/CURRENT_CHANGED_BODY/);assert.match(full[1],/CURRENT_CHANGED_BODY/);
  assert.match(view.run('reportWorkspace()'),new RegExp(reports.summary.core_opportunity.text));
- assert.match(view.run('keywordWorkspace()'),/选择深入洞察/);
+ assert.match(view.run('keywordWorkspace()'),/查看人群与场景/);
 
  view.state.project.ai_reports[0].report.modules.notes.evidence_snapshot.find(x=>x.id==='posts:p1').text='NOTES_SPECIFIC_SNAPSHOT';
  await view.run(`workflowAction('ai-evidence',{dataset:{report:'v2-report',module:'notes',evidence:'["posts:p1"]'}})`);

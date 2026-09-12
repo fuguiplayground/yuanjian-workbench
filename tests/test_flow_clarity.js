@@ -33,7 +33,7 @@ async function main(){
  const settings=harness(null);settings.fire('toggle',{id:'quick-settings',open:true});
  assert.match(settings.run('research()'),/<details[^>]*id="quick-settings"[^>]*open/);
  const first=harness(null).run('research()');
- assert.match(first,/找到值得验证的产品机会/);
+ assert.match(first,/从搜索词，找到具体的人/);
  assert.match(first,/<details[^>]*class="research-settings"/);
  assert.match(first,/目标市场：美国 Amazon/);
  assert.match(first,/跨市场参考/);

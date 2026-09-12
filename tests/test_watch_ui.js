@@ -8,9 +8,9 @@ function harness(){
  const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',textContent:'',scrollIntoView(){this.scrolled=true}});return nodes.get(selector)};
  const context=vm.createContext({document:{querySelector:node},window:{scrollTo(){}},location:{hash:''},
   setTimeout(){return 1},clearTimeout(){},requestAnimationFrame(){},
-  keywordWorkspace(){return ''},insightWorkspace(){return ''},reportWorkspace(){return ''},guide(){return ''},research(){return ''},jobView(){return ''},
+  audienceWorkspace(){return ''},keywordWorkspace(){return ''},insightWorkspace(){return ''},reportWorkspace(){return ''},guide(){return ''},research(){return ''},jobView(){return ''},
   async fetch(path,options){requests.push({path,options});assert.ok(responses.length,'Only an explicit refresh may request history');return responses.shift()(path,options)}});
- vm.runInContext(script,context);vm.runInContext(inline,context);
+ vm.runInContext(fs.readFileSync('web/workflow.js','utf8').split('\n').find(x=>x.startsWith('const AUDIENCE_STEPS=')),context);vm.runInContext(script,context);vm.runInContext(inline,context);
  return {context,nodes,requests,responses,run:code=>vm.runInContext(code,context),
   set(p){context.inputProject=p;vm.runInContext("state.project=inputProject;state.page='products';state.query='';state.filter='all';state.sort='default'",context)}};
 }
@@ -34,7 +34,8 @@ function renderHistory(h,record){h.context.inputHistory=record;return h.run('his
 async function main(){
  const h=harness();h.set(project());
  assert.match(html,/<script src="\/watch.js"><\/script>/);
- assert.equal(h.run("NAV.some(x=>x[0]==='products'&&x[2]==='竞品研究')"),true);
+ assert.equal(h.run("NAV.some(x=>x[0]==='products')"),false);
+ assert.match(html,/data-page="products"><span class="nav-label">竞品参考/);
  const watched={...product('B000000002','仅关注商品'),watched:true,candidate:false};
  const candidate={...product('B000000003','仅候选商品'),candidate:true};
  h.set(project('project-a',[watched,candidate]));

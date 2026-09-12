@@ -16,7 +16,28 @@ function insightModuleContext(r,key){const m=r.report.modules[key];return {...r,
 function moduleSourceCount(source){const p=state.project;return source==='all'?p.keywords.length+(p.posts||[]).length+p.reviews.length:(p[source]||[]).length}
 function selectedInsightModules(){const id=state.project.id,previous=latestAI('insights');workflow.moduleChoices[id]??=(isModularInsight(previous)?previous.requested_modules:['audience','intent','summary']).filter(key=>INSIGHT_MODULES.some(x=>x.key===key)&&moduleSourceCount(INSIGHT_MODULES.find(x=>x.key===key).source));return INSIGHT_MODULES.filter(x=>workflow.moduleChoices[id].includes(x.key)&&moduleSourceCount(x.source)).map(x=>x.key)}
 function selectedInsightReport(){return (state.project.ai_reports||[]).find(x=>x.id===workflow.reportChoices[state.project.id]&&x.kind==='insights')||latestAI('insights')}
-function flowNav(active){if(active==='posts')active='research';return `<nav class="flow-nav" aria-label="需求调研步骤">${[['research','采集资料'],['keywords','关键词分析'],['insights','需求与营销']].map(([id,label],i)=>`<button class="${id===active?'active':''}" data-action="navigate" data-page="${id}"><span>${i+1}</span>${label}</button>`).join('')}</nav>`}
+// 五步是同一项目、同一份报告的不同决策视图，不另造分析结果。
+const AUDIENCE_STEPS=[['keywords','关键词整理'],['audience','人群与场景'],['tower','千机塔洞察'],['strategy','人群策略'],['content','内容与验证']];
+function audiencePerson(r){const rows=r?.report?.modules?.audience?.status==='success'?r.report.modules.audience.report.audiences||[]:[];const key=state.project.id+':'+r?.id;return {rows,key,index:Math.min(workflow.audienceSelection?.[key]||0,Math.max(0,rows.length-1))}}
+function audienceWorkspace(){
+ const page=state.page,r=selectedInsightReport(),modular=isModularInsight(r),{rows,key,index}=audiencePerson(r),person=rows[index];
+ const intro={audience:['人群与场景','从搜索词背后的任务出发：谁，在什么场景，想解决什么问题？'],tower:['千机塔洞察','沿用上一步的人群，区分观察到的事实、模型推断和待验证问题。'],strategy:['人群策略','针对具体人群，明确切入点、承诺、证明和应避免的表达。'],content:['内容与验证','一条内容服务一类人：把策略变成选题，再用真实反馈检验。']}[page];
+ const point=(v,ctx)=>insightNodesHtml([{type:'point',value:v}],ctx);
+ const ctx=modular&&r.report.modules.audience?insightModuleContext(r,'audience'):r;
+ const field=(title,v)=>`<section class="strategy-field"><h3>${esc(title)}</h3>${point(v,ctx)}</section>`;
+ const panel=(module)=>{const m=modular?r.report.modules[module]:null;if(m?.status!=='success')return `<div class="source-note">${esc(INSIGHT_MODULES.find(x=>x.key===module).label)}尚未生成成功；在分析设置中选择对应章节。</div>`;const c=insightModuleContext(r,module);return `<section class="report-sheet">${reportMeta(c)}${insightNodesHtml(insightModuleNodes(module,m.report,c),c)}</section>`};
+ let body='';
+ if(!modular)body=empty('人群策略尚未生成','先整理已有关键词，再配置人群、搜索意图、综合判断和营销选题。历史整篇报告仍保留在完整报告中。',button('配置人群策略分析','prepare-audience-flow','','primary'));
+ else if(page==='audience')body=rows.length?`<div class="audience-candidates">${rows.map((x,i)=>`<article class="report-sheet"><span class="eyebrow">人群假设 ${i+1} · ${esc(x.priority||'优先级待验证')}</span><h2>${esc(x.name)}</h2><p>${esc(x.one_line)}</p>${point(x.layers?.scene,ctx)}<h3>对应搜索词</h3>${(x.search_terms||[]).map(t=>`<p>${esc(t.text)} ${evidenceButton(t.evidence_id?[t.evidence_id]:[],'查看原词',r.id,'audience')}</p>`).join('')||'<p>待补充原词关联</p>'}${button('沿这类人群继续 →','choose-audience','','primary',`data-index="${i}"`)}</article>`).join('')}</div><details class="report-details"><summary>搜索意图与决策阶段 · 辅助判断</summary>${panel('intent')}</details>`:empty('人群与场景尚未生成','已有关键词只是线索，暂不自动补出人群。',button('配置人群分析','prepare-audience-flow','','primary'));
+ else if(page==='tower')body=person?`<p class="source-note">按知识库统一八层阅读。深层动机需原话或行为支持；没有证据就保留问题。旧报告的“深层情感 / 价值观”留在完整报告，不改名冒充“隐秘欲望”。</p><div class="tower-grid">${[['基本属性',person.layers?.natural],['社会身份',person.layers?.social],['消费模式',person.layers?.consumption],['行为场景',person.layers?.scene],['生活方式',person.layers?.lifestyle],['情绪状态',person.layers?.emotion]].map(([title,v],i)=>field(`${i+1}. ${title}`,v)).join('')}<section class="strategy-field"><h3>7. 决策障碍</h3>${person.barriers?.length?person.barriers.map(v=>point(v,ctx)).join(''):'<p>证据不足，待补充。</p>'}</section><section class="strategy-field"><h3>8. 隐秘欲望 · 待验证</h3><p>旧报告未单独记录这一层，暂不从情绪或价值观推导。</p><p class="caption">下一步：通过访谈与原话核对真正想获得的改变，并记录反例。</p></section></div>`:empty('先形成人群假设','前往人群与场景，查看或生成人群分析。');
+ else if(page==='strategy')body=(person?`<section class="report-sheet"><h2>为这类人制定策略</h2><p class="caption">以下内容来自同一人群记录，不自动拼接其他人群的结论。</p><div class="tower-grid">${[['为什么优先',person.priority_reason],['为谁解决问题',person.positioning?.target],['具体承诺',person.positioning?.promise],['需要拿出的证明',person.positioning?.proof],['应避免的承诺',person.positioning?.avoid]].map(([title,v])=>field(title,v)).join('')}</div></section>`:'')+`<h2>项目整体取舍</h2><p class="caption">综合判断是项目级结果；请核对其推荐人群与当前选择是否一致。</p>${panel('summary')}`;
+ else body=`<p class="source-note">选题是项目级建议，按每条“面向”核对人群；不按相似名称自动认定关联。尚未录入投放或成交结果，本页不是效果验证报告。</p>${panel('topics')}${person?`<section class="report-sheet"><h2>这类人群需要验证的问题</h2><ul>${(person.validation_questions||[]).map(q=>`<li>${esc(q)}</li>`).join('')||'<li>待补充访谈问题</li>'}</ul></section>`:''}`;
+ const i=AUDIENCE_STEPS.findIndex(x=>x[0]===page),next=AUDIENCE_STEPS[i+1];
+ return head(intro[0],intro[1],button('分析设置 / 完整报告','navigate','','','data-page="insights"'))+flowNav(page)+demoNote()+aiProgress()+`<div class="source-note">同一份报告贯穿五步 · ${esc(r?date(r.created_at||r.finished_at):'尚未生成')}。页面浏览不会触发采集或模型调用。</div>`+(r?reportMeta(r):'')+(ctx&&person?reportMeta(ctx)+(ctx.report?.limitations?.length?`<div class="source-note">人群分析缺口：${ctx.report.limitations.map(esc).join('；')}</div>`:''):'')+(person&&page!=='audience'?`<div class="audience-context"><label>正在研究的人群 <select id="strategy-audience">${rows.map((x,i)=>`<option value="${i}" ${i===index?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label><span class="caption">切换后，洞察、策略和验证问题一起更新</span></div>`:'')+body+`<div class="next-step"><div><h3>${next?'下一步：'+next[1]:'返回人群策略'}</h3><p>${next?'沿用当前人群和报告，继续做下一个判断。':'核对承诺与证据，再决定是否开展真实内容测试。'}</p></div>${button(next?'继续 →':'返回人群策略','navigate','','primary',`data-page="${next?.[0]||'strategy'}"`)}</div>`;
+}
+document.addEventListener('change',e=>{if(e.target.id==='strategy-audience'){const r=selectedInsightReport(),{rows,key}=audiencePerson(r),index=Number(e.target.value);if(Number.isInteger(index)&&index>=0&&index<rows.length){workflow.audienceSelection??={};workflow.audienceSelection[key]=index;render()}}});
+
+function flowNav(active){return `<nav class="flow-nav" aria-label="拿词后的人群策略步骤">${AUDIENCE_STEPS.map(([id,label],i)=>`<button class="${id===active?'active':''}" data-action="navigate" data-page="${id}"><span>${i+1}</span>${label}</button>`).join('')}</nav>`}
 function latestAI(kind){return [...(state.project?.ai_reports||[])].reverse().find(x=>x.kind===kind&&(x.status==='success'||isModularInsight(x)))}
 function latestKeywordClassification(moduleOnly=false){
  for(const r of [...(state.project?.ai_reports||[])].reverse()){
@@ -50,7 +71,7 @@ function keywordWorkspace(){
   +(clean?`<section class="report-sheet"><div class="section-head"><h2>关键词库已完成</h2>${button('查看本次关键词库','view-keyword-library','arrow','primary',`data-report="${esc(clean.id)}"`)}</div>${reportMeta(clean)}<p>${esc(clean.report.summary||'查看有效词、主题、搜索意图与逐词判断依据。')}</p></section>`:'')
   +(r||!clean?`<section class="report-sheet">${clean?'<span class="eyebrow">旧版关键词报告</span>':''}<div class="section-head"><h2>${esc(r?.report?.title||'从已有关键词中找需求线索')}</h2>${reportControls('keywords',r)}</div>
   ${r?reportMeta(r)+keywordReportBody(r):empty('关键词采完以后，在这里看结论','点击上方「生成关键词报告」，整理有效词、5W1H、搜索意图、主题与下一步研究方向。')}</section>`:'')
-  +`<div class="next-step"><div><h3>继续看：谁在搜索，为什么需要？</h3><p>选择人群画像、搜索意图或营销选题，按这次要解决的问题深入分析。</p></div>${button('选择深入洞察','view-insights','arrow','primary')}</div>`
+  +`<div class="next-step"><div><h3>继续看：谁在搜索，为什么需要？</h3><p>先把搜索词关联到具体人群与场景，再沿千机塔制定策略。</p></div>${button('查看人群与场景','navigate','arrow','primary','data-page="audience"')}</div>`
 }
 function evidenceButton(ids,label='查看依据',reportId='',moduleKey=''){return ids?.length?`<span class="evidence-refs">证据：${ids.map(esc).join('、')}</span>`+button(`${label} ${ids.length}`,'ai-evidence','','small',`data-evidence="${esc(JSON.stringify(ids))}" data-report="${esc(reportId)}" data-module="${esc(moduleKey)}"`):'<span class="caption">待补充证据</span>'}
 function statementList(rows,reportId='',moduleKey=''){return (rows||[]).map(x=>`<article class="finding"><p>${esc(x.text)}</p>${evidenceButton(x.evidence_ids,'查看依据',reportId,moduleKey)}</article>`).join('')}
@@ -210,6 +231,8 @@ function reportMarkdown(r){
  return lines.join('\n');
 }
 async function workflowAction(action,el){switch(action){
+case'prepare-audience-flow':workflow.moduleChoices[state.project.id]=['audience','intent','topics','summary'].filter(key=>moduleSourceCount(INSIGHT_MODULES.find(x=>x.key===key).source));workflow.analysisSettingsOpen[state.project.id]=true;goto('insights');return true;
+case'choose-audience':{const r=selectedInsightReport(),{rows,key}=audiencePerson(r),index=Number(el.dataset.index);if(!Number.isInteger(index)||index<0||index>=rows.length)return true;workflow.audienceSelection??={};workflow.audienceSelection[key]=index;goto('tower');return true}
 case'ai-keywords':await startAI('keywords');return true;
 case'ai-insights':closeModal();goto('insights');return true;
 case'generate-insight-modules':{const modules=selectedInsightModules();if(!modules.length)throw Error('请至少选择一项有资料的分析');await startAI('insights','',[],{modules});return true}

@@ -108,3 +108,15 @@ h1,h2,h3{text-wrap:balance}h1{font-weight:650;letter-spacing:-.8px}
  .page-head{flex-direction:column;gap:16px}.page-head>.actions{flex-wrap:wrap;width:100%;justify-content:flex-start}
  .page-head>.actions .btn{font-size:12px}.page-head>div:first-child{width:100%}
 }
+
+/* 人群策略：连续决策视图，资料工具退到辅助区。 */
+.audience-context{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:18px 20px;background:#edf3ee;border:1px solid #d9e5dd;border-radius:12px;margin:20px 0}
+.audience-context label{font-size:13px;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.audience-context select{max-width:100%;min-height:40px;padding:8px 12px;border:1px solid #cedbd1;border-radius:8px;background:#fff;font:inherit}
+.audience-candidates,.tower-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.strategy-field{min-width:0;padding:20px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow-wrap:anywhere}
+.strategy-field h3{font-size:15px;margin:0 0 14px}.strategy-field p{line-height:1.8}
+.flow-nav{flex-wrap:wrap}.sidebar{overflow-y:auto}.side-bottom{margin-top:auto}
+@media(max-width:800px){.audience-candidates,.tower-grid{grid-template-columns:1fr}.flow-nav{display:none}.sidebar .nav{overflow-x:auto;flex-wrap:nowrap}.sidebar .nav button{flex-shrink:0}.audience-context select{width:100%}.audience-context label{width:100%}}
+.side-bottom .nav-label{display:inline}.side-bottom button{min-height:36px}
+@media(max-width:800px){.side-bottom{display:flex;flex-wrap:wrap;gap:4px}.side-bottom button{font-size:11px;padding:6px 8px}.side-bottom button .nav-label{display:inline!important}}
