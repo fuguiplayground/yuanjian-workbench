@@ -34,7 +34,7 @@ function renderHistory(h,record){h.context.inputHistory=record;return h.run('his
 async function main(){
  const h=harness();h.set(project());
  assert.match(html,/<script src="\/watch.js"><\/script>/);
- assert.equal(h.run("NAV.some(x=>x[0]==='products'&&x[2]==='电商盯盘')"),true);
+ assert.equal(h.run("NAV.some(x=>x[0]==='products'&&x[2]==='竞品研究')"),true);
  let view=h.run('marketWatch()');
  assert.match(view,/查看竞品变化/);assert.match(view,/未开启定时监控/);assert.equal(h.requests.length,0);
  await h.run("runAction('product-history',{dataset:{id:'B000000001'}})");

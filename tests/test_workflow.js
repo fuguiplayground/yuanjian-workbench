@@ -97,7 +97,7 @@ async function main() {
   assert.equal(fresh.state.project.id,'project-a');
   assert.equal(fresh.posts('/collect')[1].body.revision,5,'polling refreshes the project revision before its next task');
 
-  assert.match(fresh.run('nextStep()'),/data-action="view-insights"/,'collected material exposes the module selection step');
+  assert.match(fresh.run('nextStep()'),/data-page="keywords"/,'keyword-only material recommends keyword analysis first');
   await fresh.run("workflowAction('view-insights', {})");
   assert.equal(fresh.posts('/ai').length,0,'opening module selection does not implicitly invoke a model');
   assert.match(fresh.run("flowNav('insights')"),/data-page="keywords"/,'the existing keyword report remains available in the internal steps');
@@ -119,7 +119,7 @@ async function main() {
   await fresh.run("workflowAction('keyword-data', {})");
   assert.equal(fresh.state.page,'research');
   assert.equal(fresh.run('quick.tab'),'keywords','returning to source material opens its keyword collection');
-  assert.match(fresh.run('nextStep()'),/data-action="view-insights"/);
+  assert.match(fresh.run('nextStep()'),/data-page="keywords"/);
   fresh.state.page='research';
   await fresh.run("workflowAction('view-keyword-report', {})");
   assert.equal(fresh.state.page,'keywords');

@@ -50,7 +50,7 @@ function harness(hash = '') {
   assert.equal(h.run('quick.platforms.join(",")'), 'xhs,reddit');
 
   assert.deepEqual(JSON.parse(h.run('JSON.stringify(NAV.map(([id,,label])=>[id,label]))')),
-    [['research','关键词洞察'],['products','电商盯盘'],['report','报告与选品']]);
+    [['research','需求调研'],['products','竞品研究'],['report','结论与行动']]);
   for (const page of ['research','keywords','posts','insights']) assert.equal(h.run(`primaryPage('${page}')`),'research');
   assert.equal(h.run("routePage('unknown')"), 'research');
   for (const [page,view,active] of [

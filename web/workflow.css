@@ -4,3 +4,20 @@
 .watch-chart{margin:24px 0}.watch-chart svg{display:block;width:100%;height:auto;max-height:250px;stroke:none}.watch-chart text{font:12px -apple-system,BlinkMacSystemFont,sans-serif;fill:#737b85;stroke:none}.watch-chart figcaption{font-weight:600;margin-bottom:12px}.watch-page .product-cell{max-width:360px;text-align:left}.watch-page #watch-history{scroll-margin-top:145px;margin-top:30px}.watch-page td:last-child .btn{margin:3px}.watch-page .flat-section p{margin-top:12px}
 .watch-products{table-layout:fixed}.watch-products th,.watch-products td{padding:14px 10px}.watch-products th:nth-child(1){width:34%}.watch-products th:nth-child(2){width:12%}.watch-products th:nth-child(3){width:12%}.watch-products th:nth-child(4){width:16%}.watch-products th:nth-child(5){width:12%}.watch-products th:nth-child(6){width:14%}.watch-page .watch-products .product-cell{min-width:0;max-width:none;width:100%;gap:10px}.watch-products .product-cell>span{min-width:0}.watch-products .product-cell strong{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}.watch-products .product-art{width:42px;height:54px}.watch-products td{overflow-wrap:anywhere}.watch-products .price{font-size:12px}.watch-products .secondary{font-size:11px}@media(max-width:800px){.watch-products{min-width:730px}}
 .keyword-depth{margin:26px 0 22px;padding-top:22px;border-top:1px solid var(--line)}.keyword-depth fieldset{border:0;margin:0;padding:0}.keyword-depth legend{font-size:12px;color:var(--muted);margin-bottom:12px;padding:0}.keyword-mode-picker{display:flex;gap:12px 28px;flex-wrap:wrap}.keyword-mode-picker label{display:flex!important;align-items:center;gap:8px;margin:0!important;font-size:14px!important;cursor:pointer;color:var(--ink)!important}.keyword-mode-picker input{width:16px!important;height:16px!important;padding:0!important;margin:0!important;accent-color:var(--blue)}.keyword-depth-options{display:flex;gap:24px;margin-top:20px;flex-wrap:wrap}.keyword-depth-options label{font-size:12px!important;color:var(--muted)!important;display:flex!important;align-items:center;gap:12px;margin:0!important}.keyword-depth-options select{width:94px!important;padding:9px 10px!important;font-size:13px!important}.keyword-depth-options input{width:105px!important;padding:9px 10px!important;font-size:13px!important;margin:0!important}.keyword-depth-options :disabled{background:#f5f6f8;color:#8b939e;cursor:default}.keyword-depth>.caption{margin:14px 0 0;line-height:1.75}.keyword-depth .keyword-mode-picker label:has(input:checked){color:var(--blue)!important}.collection-budget-stop{color:var(--muted);font-size:12px}@media(max-width:600px){.keyword-mode-picker{gap:14px 20px}.keyword-depth-options{gap:14px}}
+
+/* 研究入口：首屏优先给目标，参数按需展开，预算保持可见。 */
+.research-context{margin:0 0 22px;color:var(--muted);font-size:13px;line-height:1.8}
+.research-context strong{color:var(--ink);font-weight:600}
+.research-settings{margin:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0}
+.research-settings>summary,.analysis-settings>summary{cursor:pointer;color:var(--blue);font-weight:500;line-height:1.8}
+.analysis-settings{margin-top:28px;border:1px solid var(--line);border-radius:10px;padding:18px 22px}
+.analysis-settings[open]>summary{margin-bottom:18px}
+@media(max-width:700px){.analysis-settings{padding:15px}.research-context{font-size:12px}.next-step .actions{flex-wrap:wrap}}
+@media(max-width:700px){
+ .quick-input>.actions{flex-direction:column;align-items:stretch}
+ .quick-input>.actions>.btn{white-space:normal;text-align:center}
+ .quick-input,.page-head>div,.research-settings{min-width:0}
+ .research-settings .quick-options{align-items:stretch}
+ .research-settings .quick-options>div{min-width:0}
+ .research-settings .platform-picker{flex-wrap:wrap}
+}
