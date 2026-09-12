@@ -1,6 +1,7 @@
 // 运行实际渲染函数，验证指引、报告状态与只读打开行为。
 const assert=require('node:assert/strict');
 const {harness,fixture}=require('./test_workflow');
+const {reportFixture}=require('./test_insight_modules');
 function cleanReport(p,id='clean-only') {
  return {id,kind:'insights',schema_version:2,status:'partial',data_version:p.data_version,
   requested_modules:['clean'],report:{title:'关键词库报告',modules:{clean:{status:'success',data_version:p.data_version,
@@ -14,7 +15,24 @@ async function main(){
  assert.doesNotMatch(report,/尚未生成；先采关键词/);
  assert.doesNotMatch(report,/data-action="ai-keywords"/);
  assert.doesNotMatch(h.run('fullReportHtml()'),/关键词报告尚未生成/);
- assert.match(h.run('fullReportHtml()'),/关键词概况/);
+ assert.match(h.run('fullReportHtml()'),/有据摘要/);
+ const separate=fixture(),clean=reportFixture('clean-first'),later=reportFixture('audience-later');
+ clean.requested_modules=['clean'];clean.report.modules={clean:clean.report.modules.clean};
+ const cleanBody=clean.report.modules.clean.report;
+ cleanBody.summary='独立清洗摘要 <需复核>';cleanBody.quality='limited';cleanBody.limitations=['独立清洗缺口 <未覆盖>'];
+ later.requested_modules=['audience','intent','topics','summary'];
+ later.report.modules=Object.fromEntries(later.requested_modules.map(key=>[key,later.report.modules[key]]));
+ separate.ai_reports=[clean,later];const separateView=harness(separate),full=separateView.run('fullReportHtml()');
+ const cleanSection=full.split('<h2>需求与营销建议</h2>')[0];
+ for(const text of [cleanBody.title,'SAVED_KEYWORD'])assert.ok(cleanSection.includes(text),text);
+ assert.match(cleanSection,/独立清洗摘要 &lt;需复核&gt;/);
+ assert.match(cleanSection,/资料有限，请结合本项缺口阅读/);
+ assert.match(cleanSection,/独立清洗缺口 &lt;未覆盖&gt;/);
+ assert.ok(full.includes(later.report.modules.audience.report.audiences[0].one_line));
+ assert.equal(separateView.calls.length,0);
+ const combined=fixture(),combinedReport=reportFixture('combined');combined.ai_reports=[combinedReport];
+ const combinedHtml=harness(combined).run('fullReportHtml()');
+ assert.equal((combinedHtml.match(/id="insight-combined-clean"/g)||[]).length,1,'同一报告中的关键词章节只导出一次');
  h.fields['#insight-clean-only-clean']={scrollIntoView(){}};
  await h.run("workflowAction('view-keyword-library',{dataset:{report:'clean-only'}})");
  assert.equal(h.run('selectedInsightReport().id'),'clean-only');assert.equal(h.calls.length,0);

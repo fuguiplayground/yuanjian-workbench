@@ -103,7 +103,7 @@ h1,h2,h3{text-wrap:balance}h1{font-weight:650;letter-spacing:-.8px}
 @media(max-width:700px){.first-visit{align-items:flex-start;flex-direction:column}}
 @media(max-width:700px){
  .sidebar{position:relative}.brand{justify-content:flex-start}.brand strong{display:block!important;font-size:18px}
- .side-bottom{display:flex;position:absolute;right:16px;top:19px;gap:6px;margin:0}
+ .side-bottom{display:flex;position:static;flex-wrap:wrap;gap:6px;margin:8px 0 0}
  .side-bottom button{width:auto;padding:5px;font-size:11px;gap:4px}.side-bottom button svg{display:none}
  .page-head{flex-direction:column;gap:16px}.page-head>.actions{flex-wrap:wrap;width:100%;justify-content:flex-start}
  .page-head>.actions .btn{font-size:12px}.page-head>div:first-child{width:100%}
